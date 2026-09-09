@@ -1,22 +1,19 @@
 import 'package:flutter/material.dart';
-import '../repositories/persistent_order_repository.dart';
-import '../models/order.dart';
+import '../repositories/persistent_vehicle_repository.dart';
+import '../models/vehicle.dart';
 import 'load_status.dart';
 import 'page_result.dart';
-import 'order_query.dart';
 
-class OrderListNotifier extends ChangeNotifier {
-  final PersistentOrderRepository _repository;
-  OrderListNotifier(this._repository);
+class VehicleListNotifier extends ChangeNotifier {
+  final PersistentVehicleRepository _repository;
+  VehicleListNotifier(this._repository);
 
-  OrderQuery _query = const OrderQuery();
-  PageResult<Order> _result = PageResult.empty();
+  List<Vehicle> _items = [];
   LoadStatus _status = LoadStatus.idle;
   String? _error;
   final Set<int> _selected = {};
 
-  OrderQuery get query => _query;
-  PageResult<Order> get result => _result;
+  List<Vehicle> get items => _items;
   LoadStatus get status => _status;
   String? get error => _error;
   Set<int> get selected => Set.unmodifiable(_selected);
@@ -27,19 +24,13 @@ class OrderListNotifier extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      _result = await _repository.find(_query);
+      _items = await _repository.findAll();
       _status = LoadStatus.success;
     } catch (e) {
-      _error = 'Не удалось загрузить список заказов: $e';
+      _error = 'Не удалось загрузить список транспорта: $e';
       _status = LoadStatus.error;
     }
     notifyListeners();
-  }
-
-  Future<void> applyQuery(OrderQuery next) async {
-    _query = next;
-    _selected.clear();
-    await load();
   }
 
   void toggleSelection(int id) {

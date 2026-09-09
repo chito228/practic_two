@@ -2,6 +2,8 @@ class OrderQuery {
   final String search;
   final String? status;
   final int? clientId;
+  final int? cargoId;
+  final int? routeId;
   final DateTime? dateFrom;
   final DateTime? dateTo;
   final String sortField;
@@ -14,9 +16,11 @@ class OrderQuery {
     this.search = '',
     this.status,
     this.clientId,
+    this.cargoId,
+    this.routeId,
     this.dateFrom,
     this.dateTo,
-    this.sortField = 'cargoDescription',  
+    this.sortField = 'orderNumber',
     this.sortAscending = true,
     this.page = 1,
     this.size = 10,
@@ -27,6 +31,8 @@ class OrderQuery {
     String? search,
     String? status,
     int? clientId,
+    int? cargoId,
+    int? routeId,
     DateTime? dateFrom,
     DateTime? dateTo,
     String? sortField,
@@ -39,6 +45,8 @@ class OrderQuery {
       search: search ?? this.search,
       status: status ?? this.status,
       clientId: clientId ?? this.clientId,
+      cargoId: cargoId ?? this.cargoId,
+      routeId: routeId ?? this.routeId,
       dateFrom: dateFrom ?? this.dateFrom,
       dateTo: dateTo ?? this.dateTo,
       sortField: sortField ?? this.sortField,
@@ -53,6 +61,9 @@ class OrderQuery {
       search.isNotEmpty ||
       status != null ||
       clientId != null ||
+      cargoId != null ||
+      routeId != null ||
       dateFrom != null ||
-      dateTo != null;
+      dateTo != null ||
+      includeDeleted;
 }

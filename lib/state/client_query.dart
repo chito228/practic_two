@@ -8,7 +8,7 @@ class ClientQuery {
 
   const ClientQuery({
     this.search = '',
-    this.sortField = 'name',
+    this.sortField = 'companyName',
     this.sortAscending = true,
     this.page = 1,
     this.size = 10,

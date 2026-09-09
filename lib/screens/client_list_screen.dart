@@ -7,6 +7,10 @@ import '../widgets/entity_table.dart';
 import '../widgets/responsive_list.dart';
 import '../utils/debounce.dart';
 import '../state/load_status.dart';
+import '../state/client_query.dart';
+import '../widgets/pagination_controls.dart';
+import '../repositories/persistent_client_repository.dart';
+import '../repositories/persistent_order_repository.dart';
 
 class ClientListScreen extends StatefulWidget {
   const ClientListScreen({super.key});
@@ -74,7 +78,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
             padding: const EdgeInsets.all(16.0),
             child: TextField(
               decoration: const InputDecoration(
-                labelText: 'Поиск по компании или контактному лицу',
+                labelText: 'Поиск по компании, контактному лицу или email',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.search),
               ),
@@ -94,33 +98,26 @@ class _ClientListScreenState extends State<ClientListScreen> {
                 spacing: 8,
                 children: [
                   if (notifier.query.search.isNotEmpty)
-                    Chip(
+                    ActionChip(
                       label: Text('Поиск: ${notifier.query.search}'),
-                      onDeleted: () {
-                        notifier.applyQuery(
-                          notifier.query.copyWith(search: '', page: 1),
-                        );
+                      onPressed: () {
+                        final newQuery = notifier.query.copyWith(search: '', page: 1);
+                        notifier.applyQuery(newQuery);
                       },
                     ),
                   if (notifier.query.includeDeleted)
-                    Chip(
+                    ActionChip(
                       label: const Text('Показаны удалённые'),
-                      onDeleted: () {
-                        notifier.applyQuery(
-                          notifier.query.copyWith(includeDeleted: false, page: 1),
-                        );
+                      onPressed: () {
+                        final newQuery = notifier.query.copyWith(includeDeleted: false, page: 1);
+                        notifier.applyQuery(newQuery);
                       },
                     ),
-                  Chip(
+                  ActionChip(
                     label: const Text('Сбросить всё'),
-                    onDeleted: () {
-                      notifier.applyQuery(
-                        notifier.query.copyWith(
-                          search: '',
-                          includeDeleted: false,
-                          page: 1,
-                        ),
-                      );
+                    onPressed: () {
+                      final newQuery = const ClientQuery();
+                      notifier.applyQuery(newQuery);
                     },
                   ),
                 ],
@@ -128,6 +125,25 @@ class _ClientListScreenState extends State<ClientListScreen> {
             ),
           Expanded(
             child: _buildContent(notifier),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 80.0),
+            child: PaginationControls(
+              currentPage: notifier.query.page,
+              totalPages: notifier.result.totalPages,
+              totalItems: notifier.result.total,
+              pageSize: notifier.query.size,
+              onPageChanged: (page) {
+                notifier.applyQuery(
+                  notifier.query.copyWith(page: page),
+                );
+              },
+              onSizeChanged: (size) {
+                notifier.applyQuery(
+                  notifier.query.copyWith(size: size, page: 1),
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -153,7 +169,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
           cardBuilder: (client) => Card(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: ListTile(
-              title: Text(client.name),
+              title: Text(client.companyName),
               subtitle: Text(client.contactPerson),
               trailing: Text(client.phone),
               onTap: () => context.go('/clients/${client.id}'),
@@ -178,8 +194,8 @@ class _ClientListScreenState extends State<ClientListScreen> {
             columns: [
               TableColumnSpec<Client>(
                 label: 'Компания',
-                sortField: 'name',
-                build: (c) => Text(c.name),
+                sortField: 'companyName',
+                build: (c) => Text(c.companyName),
               ),
               TableColumnSpec<Client>(
                 label: 'Контактное лицо',
@@ -192,13 +208,39 @@ class _ClientListScreenState extends State<ClientListScreen> {
               ),
             ],
             actions: (c) => [
-              IconButton(
-                icon: const Icon(Icons.visibility),
+              TextButton(
                 onPressed: () => context.go('/clients/${c.id}'),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: Size.zero,
+                ),
+                child: const Text('Показать', style: TextStyle(fontSize: 12)),
               ),
-              IconButton(
-                icon: const Icon(Icons.edit),
+              TextButton(
                 onPressed: () => context.go('/clients/${c.id}/edit'),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: Size.zero,
+                ),
+                child: const Text('Ред.', style: TextStyle(fontSize: 12)),
+              ),
+              TextButton(
+                onPressed: () => _softDelete(context, c.id),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: Size.zero,
+                  foregroundColor: Colors.orange,
+                ),
+                child: const Text('Скрыть', style: TextStyle(fontSize: 12)),
+              ),
+              TextButton(
+                onPressed: () => _hardDelete(context, c.id),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: Size.zero,
+                  foregroundColor: Colors.red,
+                ),
+                child: const Text('Удалить', style: TextStyle(fontSize: 12)),
               ),
             ],
           ),
@@ -208,12 +250,12 @@ class _ClientListScreenState extends State<ClientListScreen> {
     }
   }
 
-  Future<void> _confirmDelete(BuildContext context, ClientListNotifier notifier) async {
+  Future<void> _softDelete(BuildContext context, int id) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Подтверждение удаления'),
-        content: Text('Вы уверены, что хотите удалить ${notifier.selected.length} клиентов?'),
+        title: const Text('Скрыть клиента?'),
+        content: const Text('Клиент будет скрыт, но не удалён. Его можно будет восстановить.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -221,7 +263,204 @@ class _ClientListScreenState extends State<ClientListScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить'),
+            child: const Text('Скрыть'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      final repository = Provider.of<PersistentClientRepository>(context, listen: false);
+      await repository.softDelete(id);
+      final notifier = Provider.of<ClientListNotifier>(context, listen: false);
+      await notifier.load();
+    }
+  }
+
+  Future<void> _hardDelete(BuildContext context, int id) async {
+    // 1. Проверяем, есть ли у клиента заказы
+    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
+    final orders = await orderRepo.findByClientId(id);
+    
+    // 2. Если есть заказы → показываем диалог с запретом
+    if (orders.isNotEmpty) {
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text(
+            'Невозможно удалить клиента',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'У этого клиента есть активные заказы:',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              ...orders.map((order) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2.0),
+                child: Text(
+                  '• Заказ #${order.orderNumber} (${order.cargoDescription})',
+                  style: const TextStyle(fontSize: 14),
+                ),
+              )),
+              const SizedBox(height: 12),
+              Text(
+                'Количество заказов: ${orders.length}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Сначала удалите или переназначьте заказы, затем попробуйте снова.',
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'OK',
+                style: TextStyle(fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // 3. Если заказов нет → спрашиваем подтверждение
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text(
+          'Удалить клиента навсегда?',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: const Text(
+          'Это действие нельзя отменить!\n\n'
+          'Все данные клиента будут безвозвратно удалены.',
+          style: TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(
+              'Отмена',
+              style: TextStyle(fontSize: 14),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Удалить навсегда',
+              style: TextStyle(fontSize: 14, color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+    
+    // 4. Если подтвердил → удаляем
+    if (confirmed == true) {
+      final repository = Provider.of<PersistentClientRepository>(context, listen: false);
+      await repository.hardDelete(id);
+      final notifier = Provider.of<ClientListNotifier>(context, listen: false);
+      await notifier.load();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Клиент удалён навсегда'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmDelete(BuildContext context, ClientListNotifier notifier) async {
+    // Проверка массового удаления
+    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
+    final clientsWithOrders = <int>[];
+    
+    for (final id in notifier.selected) {
+      final orders = await orderRepo.findByClientId(id);
+      if (orders.isNotEmpty) {
+        clientsWithOrders.add(id);
+      }
+    }
+    
+    if (clientsWithOrders.isNotEmpty) {
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text(
+            'Невозможно удалить клиентов',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            '${clientsWithOrders.length} клиент(ов) имеют активные заказы.\n\n'
+            'Сначала удалите или переназначьте заказы, затем попробуйте снова.',
+            style: const TextStyle(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'OK',
+                style: TextStyle(fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text(
+          'Подтверждение удаления',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          'Вы уверены, что хотите удалить ${notifier.selected.length} клиентов?',
+          style: const TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(
+              'Отмена',
+              style: TextStyle(fontSize: 14),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Удалить',
+              style: TextStyle(fontSize: 14, color: Colors.red),
+            ),
           ),
         ],
       ),

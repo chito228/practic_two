@@ -40,12 +40,18 @@ class EntityTable<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Находим индекс колонки для сортировки
+    int? sortColumnIndex;
+    if (sortField != null) {
+      sortColumnIndex = columns.indexWhere((col) => col.sortField == sortField);
+      // Если колонка не найдена, устанавливаем null
+      if (sortColumnIndex == -1) sortColumnIndex = null;
+    }
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
-        sortColumnIndex: sortField != null
-            ? columns.indexWhere((col) => col.sortField == sortField)
-            : null,
+        sortColumnIndex: sortColumnIndex,
         sortAscending: sortAscending,
         columns: [
           if (onToggleSelect != null)

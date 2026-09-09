@@ -27,30 +27,34 @@ class PaginationControls extends StatelessWidget {
         children: [
           Row(
             children: [
-              IconButton(
-                icon: const Icon(Icons.first_page),
-                onPressed: currentPage > 1 ? () => onPageChanged(1) : null,
-                tooltip: 'Первая страница',
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_left),
-                onPressed: currentPage > 1 ? () => onPageChanged(currentPage - 1) : null,
-                tooltip: 'Предыдущая страница',
-              ),
-              Text(
-                '$currentPage / $totalPages',
-                style: const TextStyle(fontSize: 16),
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right),
-                onPressed: currentPage < totalPages ? () => onPageChanged(currentPage + 1) : null,
-                tooltip: 'Следующая страница',
-              ),
-              IconButton(
-                icon: const Icon(Icons.last_page),
-                onPressed: currentPage < totalPages ? () => onPageChanged(totalPages) : null,
-                tooltip: 'Последняя страница',
-              ),
+              if (totalPages > 1) ...[
+                IconButton(
+                  icon: const Icon(Icons.first_page),
+                  onPressed: currentPage > 1 ? () => onPageChanged(1) : null,
+                  tooltip: 'Первая страница',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_left),
+                  onPressed: currentPage > 1 ? () => onPageChanged(currentPage - 1) : null,
+                  tooltip: 'Предыдущая страница',
+                ),
+                Text(
+                  '$currentPage / $totalPages',
+                  style: const TextStyle(fontSize: 16),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right),
+                  onPressed: currentPage < totalPages ? () => onPageChanged(currentPage + 1) : null,
+                  tooltip: 'Следующая страница',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.last_page),
+                  onPressed: currentPage < totalPages ? () => onPageChanged(totalPages) : null,
+                  tooltip: 'Последняя страница',
+                ),
+              ] else ...[
+                const SizedBox(height: 48),
+              ],
             ],
           ),
           Row(

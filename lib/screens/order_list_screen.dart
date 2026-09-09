@@ -7,11 +7,13 @@ import '../widgets/entity_table.dart';
 import '../widgets/responsive_list.dart';
 import '../utils/debounce.dart';
 import '../state/load_status.dart';
-import '../state/order_query.dart'; 
+import '../state/order_query.dart';
+import '../widgets/pagination_controls.dart';
+import '../repositories/persistent_order_repository.dart';
+import '../repositories/persistent_client_repository.dart';
 
 class OrderListScreen extends StatefulWidget {
-  final Map<String, String> initialQuery;
-  const OrderListScreen({super.key, this.initialQuery = const {}});
+  const OrderListScreen({super.key});
 
   @override
   State<OrderListScreen> createState() => _OrderListScreenState();
@@ -19,26 +21,20 @@ class OrderListScreen extends StatefulWidget {
 
 class _OrderListScreenState extends State<OrderListScreen> {
   final Debouncer _debouncer = Debouncer();
+  Map<int, String> _clientNames = {};
 
   @override
   void initState() {
     super.initState();
-    final query = widget.initialQuery;
-    final notifier = Provider.of<OrderListNotifier>(context, listen: false);
-    notifier.applyQuery(
-      OrderQuery(
-        search: query['search'] ?? '',
-        status: query['status'],
-        clientId: int.tryParse(query['clientId'] ?? ''),
-        dateFrom: query['dateFrom'] != null ? DateTime.tryParse(query['dateFrom']!) : null,
-        dateTo: query['dateTo'] != null ? DateTime.tryParse(query['dateTo']!) : null,
-        sortField: query['sort'] ?? 'cargoDescription',
-        sortAscending: query['order'] != 'desc',
-        page: int.tryParse(query['page'] ?? '1') ?? 1,
-        size: int.tryParse(query['size'] ?? '10') ?? 10,
-        includeDeleted: query['deleted'] == 'true',
-      ),
-    );
+    _loadClientNames();
+  }
+
+  Future<void> _loadClientNames() async {
+    final clientRepo = context.read<PersistentClientRepository>();
+    final clients = await clientRepo.findAll();
+    setState(() {
+      _clientNames = {for (var c in clients) c.id: c.companyName};
+    });
   }
 
   @override
@@ -82,9 +78,12 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 Switch(
                   value: notifier.query.includeDeleted,
                   onChanged: (value) {
-                    final query = notifier.query.copyWith(includeDeleted: value, page: 1);
-                    _updateUrl(query);
-                    notifier.applyQuery(query);
+                    notifier.applyQuery(
+                      notifier.query.copyWith(
+                        includeDeleted: value,
+                        page: 1,
+                      ),
+                    );
                   },
                 ),
               ],
@@ -94,15 +93,15 @@ class _OrderListScreenState extends State<OrderListScreen> {
             padding: const EdgeInsets.all(16.0),
             child: TextField(
               decoration: const InputDecoration(
-                labelText: 'Поиск заказов',
+                labelText: 'Поиск по номеру или описанию',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.search),
               ),
               onChanged: (value) {
                 _debouncer.call(() {
-                  final query = notifier.query.copyWith(search: value, page: 1);
-                  _updateUrl(query);
-                  notifier.applyQuery(query);
+                  notifier.applyQuery(
+                    notifier.query.copyWith(search: value, page: 1),
+                  );
                 });
               },
             ),
@@ -117,87 +116,15 @@ class _OrderListScreenState extends State<OrderListScreen> {
               ),
               items: [
                 const DropdownMenuItem(value: null, child: Text('Все статусы')),
-                ...['в пути', 'доставлено', 'отменено'].map((status) {
-                  return DropdownMenuItem(
-                    value: status,
-                    child: Text(status),
-                  );
-                }).toList(),
+                const DropdownMenuItem(value: 'in_transit', child: Text('В пути')),
+                const DropdownMenuItem(value: 'delivered', child: Text('Доставлено')),
+                const DropdownMenuItem(value: 'cancelled', child: Text('Отменено')),
               ],
               onChanged: (value) {
-                final query = notifier.query.copyWith(status: value, page: 1);
-                _updateUrl(query);
-                notifier.applyQuery(query);
+                notifier.applyQuery(
+                  notifier.query.copyWith(status: value, page: 1),
+                );
               },
-            ),
-          ),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: 'ID клиента',
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.number,
-                    onFieldSubmitted: (value) {
-                      final id = int.tryParse(value);
-                      final query = notifier.query.copyWith(clientId: id, page: 1);
-                      _updateUrl(query);
-                      notifier.applyQuery(query);
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextButton(
-                    onPressed: () async {
-                      final date = await showDatePicker(
-                        context: context,
-                        initialDate: DateTime.now(),
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime.now(),
-                      );
-                      if (date != null) {
-                        final query = notifier.query.copyWith(dateFrom: date, page: 1);
-                        _updateUrl(query);
-                        notifier.applyQuery(query);
-                      }
-                    },
-                    child: Text(
-                      notifier.query.dateFrom != null
-                          ? 'С: ${notifier.query.dateFrom!.toLocal().toString().split(' ')[0]}'
-                          : 'Дата от',
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextButton(
-                    onPressed: () async {
-                      final date = await showDatePicker(
-                        context: context,
-                        initialDate: DateTime.now(),
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime.now(),
-                      );
-                      if (date != null) {
-                        final query = notifier.query.copyWith(dateTo: date, page: 1);
-                        _updateUrl(query);
-                        notifier.applyQuery(query);
-                      }
-                    },
-                    child: Text(
-                      notifier.query.dateTo != null
-                          ? 'По: ${notifier.query.dateTo!.toLocal().toString().split(' ')[0]}'
-                          : 'Дата до',
-                    ),
-                  ),
-                ),
-              ],
             ),
           ),
           if (notifier.query.hasFilters)
@@ -206,55 +133,35 @@ class _OrderListScreenState extends State<OrderListScreen> {
               child: Wrap(
                 spacing: 8,
                 children: [
+                  if (notifier.query.search.isNotEmpty)
+                    ActionChip(
+                      label: Text('Поиск: ${notifier.query.search}'),
+                      onPressed: () {
+                        final newQuery = notifier.query.copyWith(search: '', page: 1);
+                        notifier.applyQuery(newQuery);
+                      },
+                    ),
                   if (notifier.query.status != null)
-                    Chip(
-                      label: Text('Статус: ${notifier.query.status}'),
-                      onDeleted: () {
-                        final query = notifier.query.copyWith(status: null, page: 1);
-                        _updateUrl(query);
-                        notifier.applyQuery(query);
+                    ActionChip(
+                      label: Text('Статус: ${_getStatusText(notifier.query.status!)}'),
+                      onPressed: () {
+                        final newQuery = notifier.query.copyWith(status: null, page: 1);
+                        notifier.applyQuery(newQuery);
                       },
                     ),
-                  if (notifier.query.clientId != null)
-                    Chip(
-                      label: Text('Клиент ID: ${notifier.query.clientId}'),
-                      onDeleted: () {
-                        final query = notifier.query.copyWith(clientId: null, page: 1);
-                        _updateUrl(query);
-                        notifier.applyQuery(query);
+                  if (notifier.query.includeDeleted)
+                    ActionChip(
+                      label: const Text('Показаны удалённые'),
+                      onPressed: () {
+                        final newQuery = notifier.query.copyWith(includeDeleted: false, page: 1);
+                        notifier.applyQuery(newQuery);
                       },
                     ),
-                  if (notifier.query.dateFrom != null)
-                    Chip(
-                      label: Text('С: ${notifier.query.dateFrom!.toLocal().toString().split(' ')[0]}'),
-                      onDeleted: () {
-                        final query = notifier.query.copyWith(dateFrom: null, page: 1);
-                        _updateUrl(query);
-                        notifier.applyQuery(query);
-                      },
-                    ),
-                  if (notifier.query.dateTo != null)
-                    Chip(
-                      label: Text('По: ${notifier.query.dateTo!.toLocal().toString().split(' ')[0]}'),
-                      onDeleted: () {
-                        final query = notifier.query.copyWith(dateTo: null, page: 1);
-                        _updateUrl(query);
-                        notifier.applyQuery(query);
-                      },
-                    ),
-                  Chip(
+                  ActionChip(
                     label: const Text('Сбросить всё'),
-                    onDeleted: () {
-                      final query = notifier.query.copyWith(
-                        status: null,
-                        clientId: null,
-                        dateFrom: null,
-                        dateTo: null,
-                        search: '',
-                        page: 1,
-                      );
-                      _updateUrl(query);
-                      notifier.applyQuery(query);
+                    onPressed: () {
+                      final newQuery = const OrderQuery();
+                      notifier.applyQuery(newQuery);
                     },
                   ),
                 ],
@@ -263,6 +170,25 @@ class _OrderListScreenState extends State<OrderListScreen> {
           Expanded(
             child: _buildContent(notifier),
           ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 80.0),
+            child: PaginationControls(
+              currentPage: notifier.query.page,
+              totalPages: notifier.result.totalPages,
+              totalItems: notifier.result.total,
+              pageSize: notifier.query.size,
+              onPageChanged: (page) {
+                notifier.applyQuery(
+                  notifier.query.copyWith(page: page),
+                );
+              },
+              onSizeChanged: (size) {
+                notifier.applyQuery(
+                  notifier.query.copyWith(size: size, page: 1),
+                );
+              },
+            ),
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -270,6 +196,15 @@ class _OrderListScreenState extends State<OrderListScreen> {
         child: const Icon(Icons.add),
       ),
     );
+  }
+
+  String _getStatusText(String status) {
+    switch (status) {
+      case 'in_transit': return 'В пути';
+      case 'delivered': return 'Доставлено';
+      case 'cancelled': return 'Отменено';
+      default: return status;
+    }
   }
 
   Widget _buildContent(OrderListNotifier notifier) {
@@ -287,9 +222,11 @@ class _OrderListScreenState extends State<OrderListScreen> {
           cardBuilder: (order) => Card(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: ListTile(
-              title: Text(order.cargoDescription),
-              subtitle: Text('Статус: ${order.status}'),
-              trailing: Text('${order.weight} кг'),
+              title: Text(order.orderNumber),
+              subtitle: Text(
+                '${order.cargoDescription} | ${_clientNames[order.clientId] ?? 'Клиент ${order.clientId}'}',
+              ),
+              trailing: Text(_getStatusText(order.status)),
               onTap: () => context.go('/orders/${order.id}'),
             ),
           ),
@@ -307,39 +244,67 @@ class _OrderListScreenState extends State<OrderListScreen> {
                     ? !notifier.query.sortAscending
                     : true,
               );
-              _updateUrl(query);
               notifier.applyQuery(query);
             },
             columns: [
               TableColumnSpec<Order>(
-                label: 'Груз',
+                label: 'Номер',
+                sortField: 'orderNumber',
+                build: (o) => Text(o.orderNumber),
+              ),
+              TableColumnSpec<Order>(
+                label: 'Клиент',
+                build: (o) => Text(_clientNames[o.clientId] ?? 'ID: ${o.clientId}'),
+              ),
+              TableColumnSpec<Order>(
+                label: 'Описание груза',
                 sortField: 'cargoDescription',
                 build: (o) => Text(o.cargoDescription),
               ),
               TableColumnSpec<Order>(
                 label: 'Вес (кг)',
                 sortField: 'weight',
-                numeric: true,
                 build: (o) => Text(o.weight.toString()),
               ),
               TableColumnSpec<Order>(
-                label: 'Дата отправки',
-                sortField: 'sendDate',
-                build: (o) => Text(o.sendDate.toLocal().toString().split(' ')[0]),
-              ),
-              TableColumnSpec<Order>(
                 label: 'Статус',
-                build: (o) => Text(o.status),
+                build: (o) => Text(_getStatusText(o.status)),
               ),
             ],
             actions: (o) => [
-              IconButton(
-                icon: const Icon(Icons.visibility),
+              TextButton(
                 onPressed: () => context.go('/orders/${o.id}'),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: Size.zero,
+                ),
+                child: const Text('Показать', style: TextStyle(fontSize: 12)),
               ),
-              IconButton(
-                icon: const Icon(Icons.edit),
+              TextButton(
                 onPressed: () => context.go('/orders/${o.id}/edit'),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: Size.zero,
+                ),
+                child: const Text('Ред.', style: TextStyle(fontSize: 12)),
+              ),
+              TextButton(
+                onPressed: () => _softDelete(context, o.id),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: Size.zero,
+                  foregroundColor: Colors.orange,
+                ),
+                child: const Text('Скрыть', style: TextStyle(fontSize: 12)),
+              ),
+              TextButton(
+                onPressed: () => _hardDelete(context, o.id),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: Size.zero,
+                  foregroundColor: Colors.red,
+                ),
+                child: const Text('Удалить', style: TextStyle(fontSize: 12)),
               ),
             ],
           ),
@@ -349,21 +314,56 @@ class _OrderListScreenState extends State<OrderListScreen> {
     }
   }
 
-  void _updateUrl(OrderQuery query) {
-    final params = <String, String>{};
-    if (query.search.isNotEmpty) params['search'] = query.search;
-    if (query.status != null) params['status'] = query.status!;
-    if (query.clientId != null) params['clientId'] = query.clientId.toString();
-    if (query.dateFrom != null) params['dateFrom'] = query.dateFrom!.toIso8601String();
-    if (query.dateTo != null) params['dateTo'] = query.dateTo!.toIso8601String();
-    if (query.sortField != 'cargoDescription') params['sort'] = query.sortField;
-    if (!query.sortAscending) params['order'] = 'desc';
-    if (query.page > 1) params['page'] = query.page.toString();
-    if (query.size != 10) params['size'] = query.size.toString();
-    if (query.includeDeleted) params['deleted'] = 'true';
+  Future<void> _softDelete(BuildContext context, int id) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Скрыть заказ?'),
+        content: const Text('Заказ будет скрыт, но не удалён. Его можно будет восстановить.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Скрыть'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      final repository = Provider.of<PersistentOrderRepository>(context, listen: false);
+      await repository.softDelete(id);
+      final notifier = Provider.of<OrderListNotifier>(context, listen: false);
+      await notifier.load();
+    }
+  }
 
-    final uri = Uri(path: '/orders', queryParameters: params);
-    context.replace(uri.toString());
+  Future<void> _hardDelete(BuildContext context, int id) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить заказ навсегда?'),
+        content: const Text('Это действие нельзя отменить!'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Удалить навсегда'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      final repository = Provider.of<PersistentOrderRepository>(context, listen: false);
+      await repository.hardDelete(id);
+      final notifier = Provider.of<OrderListNotifier>(context, listen: false);
+      await notifier.load();
+    }
   }
 
   Future<void> _confirmDelete(BuildContext context, OrderListNotifier notifier) async {

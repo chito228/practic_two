@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import '../repositories/client_repository.dart';
+import '../repositories/persistent_client_repository.dart';
 import '../models/client.dart';
 import 'load_status.dart';
 import 'page_result.dart';
 import 'client_query.dart';
 
 class ClientListNotifier extends ChangeNotifier {
-  final ClientRepository _repository;
+  final PersistentClientRepository _repository;
   ClientListNotifier(this._repository);
 
   ClientQuery _query = const ClientQuery();

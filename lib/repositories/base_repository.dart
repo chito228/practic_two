@@ -1,0 +1,147 @@
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+
+abstract class BaseRepository<T> {
+  final SharedPreferences prefs;
+  final String key;
+  List<T> _items = [];
+
+  BaseRepository(this.prefs, this.key) {
+    _restore();
+  }
+
+  List<T> get items => _items;
+
+  T fromJson(Map<String, dynamic> json);
+  Map<String, dynamic> toJson(T item);
+  List<T> seedData();
+
+  // Метод для создания копии с новым ID - переопределяется в наследнике
+  T createCopyWithNewId(T item, int newId);
+
+  void _restore() {
+    final raw = prefs.getString(key);
+    if (raw == null) {
+      _items = seedData();
+      _persist();
+      return;
+    }
+    try {
+      final list = jsonDecode(raw) as List;
+      _items = list.map((e) => fromJson(e as Map<String, dynamic>)).toList();
+    } catch (e) {
+      print('Ошибка восстановления данных: $e');
+      _items = seedData();
+      _persist();
+    }
+  }
+
+  Future<void> _persist() async {
+    try {
+      final jsonData = jsonEncode(_items.map((e) => toJson(e)).toList());
+      await prefs.setString(key, jsonData);
+    } catch (e) {
+      print('Ошибка сохранения: $e');
+    }
+  }
+
+  int _getNextId() {
+    if (_items.isEmpty) return 1;
+    int maxId = 0;
+    for (var item in _items) {
+      try {
+        final id = (item as dynamic).id;
+        if (id is int && id > maxId) {
+          maxId = id;
+        }
+      } catch (e) {
+        // Игнорируем
+      }
+    }
+    return maxId + 1;
+  }
+
+  Future<List<T>> findAll() async {
+    await Future.delayed(const Duration(milliseconds: 50));
+    return _items.where((e) => !(e as dynamic).isDeleted).toList();
+  }
+
+  Future<List<T>> findAllWithDeleted() async {
+    await Future.delayed(const Duration(milliseconds: 50));
+    return List.from(_items);
+  }
+
+  Future<T?> findById(int id) async {
+    await Future.delayed(const Duration(milliseconds: 50));
+    try {
+      return _items.firstWhere((e) => (e as dynamic).id == id);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<T> create(T item) async {
+    await Future.delayed(const Duration(milliseconds: 50));
+    final newId = _getNextId();
+    final newItem = createCopyWithNewId(item, newId);
+    _items.add(newItem);
+    await _persist();
+    return newItem;
+  }
+
+  Future<T> update(T item) async {
+    await Future.delayed(const Duration(milliseconds: 50));
+    final id = (item as dynamic).id as int;
+    final index = _items.indexWhere((e) => (e as dynamic).id == id);
+    if (index == -1) throw StateError('Объект с id $id не найден');
+    _items[index] = item;
+    await _persist();
+    return item;
+  }
+
+  Future<void> softDelete(int id) async {
+    await Future.delayed(const Duration(milliseconds: 50));
+    final index = _items.indexWhere((e) => (e as dynamic).id == id);
+    if (index == -1) throw StateError('Объект с id $id не найден');
+    final item = _items[index];
+    // Используем copyWith через динамический вызов
+    final deletedItem = _softDeleteItem(item);
+    _items[index] = deletedItem;
+    await _persist();
+  }
+
+  Future<void> hardDelete(int id) async {
+    await Future.delayed(const Duration(milliseconds: 50));
+    _items.removeWhere((e) => (e as dynamic).id == id);
+    await _persist();
+  }
+
+  Future<void> restore(int id) async {
+    await Future.delayed(const Duration(milliseconds: 50));
+    final index = _items.indexWhere((e) => (e as dynamic).id == id);
+    if (index == -1) throw StateError('Объект с id $id не найден');
+    final item = _items[index];
+    final restoredItem = _restoreItem(item);
+    _items[index] = restoredItem;
+    await _persist();
+  }
+
+  Future<int> deleteMany(List<int> ids) async {
+    await Future.delayed(const Duration(milliseconds: 50));
+    var count = 0;
+    for (final id in ids) {
+      final i = _items.indexWhere((e) => (e as dynamic).id == id && !(e as dynamic).isDeleted);
+      if (i != -1) {
+        final item = _items[i];
+        _items[i] = _softDeleteItem(item);
+        count++;
+      }
+    }
+    await _persist();
+    return count;
+  }
+
+  // Методы для работы с удалением - переопределяются в наследнике
+  T _softDeleteItem(T item);
+  T _restoreItem(T item);
+}
