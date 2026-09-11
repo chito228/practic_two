@@ -8,6 +8,7 @@ import '../widgets/responsive_list.dart';
 import '../utils/debounce.dart';
 import '../state/load_status.dart';
 import '../repositories/persistent_route_repository.dart';
+import '../repositories/persistent_order_repository.dart';
 
 class RouteListScreen extends StatefulWidget {
   const RouteListScreen({super.key});
@@ -225,19 +226,76 @@ class _RouteListScreenState extends State<RouteListScreen> {
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
+    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
+    final allOrders = await orderRepo.findAllWithDeleted();
+    final relatedOrders = allOrders.where((o) => o.routeIds.contains(id) && !o.isDeleted).toList();
+
+    if (relatedOrders.isNotEmpty) {
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text(
+            'Невозможно удалить маршрут',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Этот маршрут используется в заказах:',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              ...relatedOrders.map((order) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2.0),
+                child: Text(
+                  '• Заказ #${order.orderNumber} (${order.cargoDescription})',
+                  style: const TextStyle(fontSize: 14),
+                ),
+              )),
+              const SizedBox(height: 12),
+              Text(
+                'Количество заказов: ${relatedOrders.length}',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Сначала удалите или переназначьте заказы, затем попробуйте снова.',
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK', style: TextStyle(fontSize: 14)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Удалить маршрут навсегда?'),
-        content: const Text('Это действие нельзя отменить!'),
+        title: const Text(
+          'Удалить маршрут навсегда?',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Это действие нельзя отменить!',
+          style: TextStyle(fontSize: 14),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
+            child: const Text('Отмена', style: TextStyle(fontSize: 14)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить навсегда'),
+            child: const Text('Удалить навсегда', style: TextStyle(fontSize: 14, color: Colors.red)),
           ),
         ],
       ),
@@ -250,33 +308,42 @@ class _RouteListScreenState extends State<RouteListScreen> {
     }
   }
 
-  Future<void> _restore(BuildContext context, int id) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Восстановить маршрут?'),
-        content: const Text('Маршрут снова появится в списке.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Восстановить'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      final repository = Provider.of<PersistentRouteRepository>(context, listen: false);
-      await repository.restore(id);
-      final notifier = Provider.of<RouteListNotifier>(context, listen: false);
-      await notifier.load();
-    }
-  }
-
   Future<void> _confirmDelete(BuildContext context, RouteListNotifier notifier) async {
+    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
+    final allOrders = await orderRepo.findAllWithDeleted();
+    final routesWithOrders = <int>[];
+
+    for (final id in notifier.selected) {
+      final relatedOrders = allOrders.where((o) => o.routeIds.contains(id) && !o.isDeleted);
+      if (relatedOrders.isNotEmpty) {
+        routesWithOrders.add(id);
+      }
+    }
+
+    if (routesWithOrders.isNotEmpty) {
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text(
+            'Невозможно удалить маршруты',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            '${routesWithOrders.length} маршрут(ов) используются в заказах.\n\n'
+            'Сначала удалите или переназначьте заказы, затем попробуйте снова.',
+            style: const TextStyle(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK', style: TextStyle(fontSize: 14)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(

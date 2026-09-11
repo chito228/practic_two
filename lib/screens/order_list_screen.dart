@@ -11,6 +11,8 @@ import '../state/order_query.dart';
 import '../widgets/pagination_controls.dart';
 import '../repositories/persistent_order_repository.dart';
 import '../repositories/persistent_client_repository.dart';
+import '../repositories/persistent_cargo_repository.dart';
+import '../repositories/persistent_route_repository.dart';
 
 class OrderListScreen extends StatefulWidget {
   const OrderListScreen({super.key});
@@ -341,19 +343,103 @@ class _OrderListScreenState extends State<OrderListScreen> {
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
+    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
+    final order = await orderRepo.findById(id);
+    if (order == null) return;
+
+    final related = <String>[];
+
+    if (order.clientId > 0) {
+      final clientRepo = Provider.of<PersistentClientRepository>(context, listen: false);
+      final client = await clientRepo.findById(order.clientId);
+      if (client != null) {
+        related.add('• Клиент: ${client.companyName}');
+      }
+    }
+
+    if (order.cargoIds.isNotEmpty) {
+      final cargoRepo = Provider.of<PersistentCargoRepository>(context, listen: false);
+      for (final cargoId in order.cargoIds) {
+        final cargo = await cargoRepo.findById(cargoId);
+        if (cargo != null) {
+          related.add('• Груз: ${cargo.name}');
+        }
+      }
+    }
+
+    if (order.routeIds.isNotEmpty) {
+      final routeRepo = Provider.of<PersistentRouteRepository>(context, listen: false);
+      for (final routeId in order.routeIds) {
+        final route = await routeRepo.findById(routeId);
+        if (route != null) {
+          related.add('• Маршрут: ${route.name}');
+        }
+      }
+    }
+
+    if (related.isNotEmpty) {
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text(
+            'Невозможно удалить заказ',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Этот заказ связан со следующими записями:',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              ...related.map((item) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2.0),
+                child: Text(item, style: const TextStyle(fontSize: 14)),
+              )),
+              const SizedBox(height: 12),
+              Text(
+                'Количество связанных записей: ${related.length}',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Сначала удалите или переназначьте связанные записи, затем попробуйте снова.',
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK', style: TextStyle(fontSize: 14)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Удалить заказ навсегда?'),
-        content: const Text('Это действие нельзя отменить!'),
+        title: const Text(
+          'Удалить заказ навсегда?',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Это действие нельзя отменить!',
+          style: TextStyle(fontSize: 14),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
+            child: const Text('Отмена', style: TextStyle(fontSize: 14)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить навсегда'),
+            child: const Text('Удалить навсегда', style: TextStyle(fontSize: 14, color: Colors.red)),
           ),
         ],
       ),
@@ -367,6 +453,41 @@ class _OrderListScreenState extends State<OrderListScreen> {
   }
 
   Future<void> _confirmDelete(BuildContext context, OrderListNotifier notifier) async {
+    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
+    final ordersWithRelations = <int>[];
+
+    for (final id in notifier.selected) {
+      final order = await orderRepo.findById(id);
+      if (order == null) continue;
+      if (order.clientId > 0 || order.cargoIds.isNotEmpty || order.routeIds.isNotEmpty) {
+        ordersWithRelations.add(id);
+      }
+    }
+
+    if (ordersWithRelations.isNotEmpty) {
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text(
+            'Невозможно удалить заказы',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            '${ordersWithRelations.length} заказ(ов) имеют связанные записи.\n\n'
+            'Сначала удалите или переназначьте связанные записи, затем попробуйте снова.',
+            style: const TextStyle(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK', style: TextStyle(fontSize: 14)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(

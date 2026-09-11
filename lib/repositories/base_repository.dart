@@ -6,6 +6,8 @@ abstract class BaseRepository<T> {
   final String key;
   List<T> _items = [];
 
+  bool dataWasReset = false;
+
   BaseRepository(this.prefs, this.key) {
     _restore();
   }
@@ -15,8 +17,6 @@ abstract class BaseRepository<T> {
   T fromJson(Map<String, dynamic> json);
   Map<String, dynamic> toJson(T item);
   List<T> seedData();
-
-  // Метод для создания копии с новым ID - переопределяется в наследнике
   T createCopyWithNewId(T item, int newId);
 
   void _restore() {
@@ -24,6 +24,7 @@ abstract class BaseRepository<T> {
     if (raw == null) {
       _items = seedData();
       _persist();
+      dataWasReset = true;
       return;
     }
     try {
@@ -33,6 +34,7 @@ abstract class BaseRepository<T> {
       print('Ошибка восстановления данных: $e');
       _items = seedData();
       _persist();
+      dataWasReset = true;
     }
   }
 
@@ -55,7 +57,6 @@ abstract class BaseRepository<T> {
           maxId = id;
         }
       } catch (e) {
-        // Игнорируем
       }
     }
     return maxId + 1;
@@ -103,10 +104,7 @@ abstract class BaseRepository<T> {
     await Future.delayed(const Duration(milliseconds: 50));
     final index = _items.indexWhere((e) => (e as dynamic).id == id);
     if (index == -1) throw StateError('Объект с id $id не найден');
-    final item = _items[index];
-    // Используем copyWith через динамический вызов
-    final deletedItem = _softDeleteItem(item);
-    _items[index] = deletedItem;
+    _items[index] = _softDeleteItem(_items[index]);
     await _persist();
   }
 
@@ -120,9 +118,7 @@ abstract class BaseRepository<T> {
     await Future.delayed(const Duration(milliseconds: 50));
     final index = _items.indexWhere((e) => (e as dynamic).id == id);
     if (index == -1) throw StateError('Объект с id $id не найден');
-    final item = _items[index];
-    final restoredItem = _restoreItem(item);
-    _items[index] = restoredItem;
+    _items[index] = _restoreItem(_items[index]);
     await _persist();
   }
 
@@ -132,8 +128,7 @@ abstract class BaseRepository<T> {
     for (final id in ids) {
       final i = _items.indexWhere((e) => (e as dynamic).id == id && !(e as dynamic).isDeleted);
       if (i != -1) {
-        final item = _items[i];
-        _items[i] = _softDeleteItem(item);
+        _items[i] = _softDeleteItem(_items[i]);
         count++;
       }
     }
@@ -141,7 +136,6 @@ abstract class BaseRepository<T> {
     return count;
   }
 
-  // Методы для работы с удалением - переопределяются в наследнике
   T _softDeleteItem(T item);
   T _restoreItem(T item);
 }

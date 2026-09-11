@@ -75,4 +75,11 @@ class PersistentRouteRepository extends BaseRepository<Route> {
   Route _restoreItem(Route item) {
     return item.copyWith(clearDeletedAt: true);
   }
+
+  Future<List<Route>> findByVehicleId(int vehicleId) async {
+    await Future.delayed(const Duration(milliseconds: 50));
+    return items
+        .where((r) => r.vehicleId == vehicleId && !r.isDeleted)
+        .toList();
+  }
 }

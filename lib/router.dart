@@ -24,7 +24,7 @@ final appRouter = GoRouter(
       path: '/',
       builder: (context, state) => const HomeScreen(),
     ),
-    // Клиенты
+
     GoRoute(
       path: '/clients',
       builder: (context, state) => const ClientListScreen(),
@@ -47,7 +47,7 @@ final appRouter = GoRouter(
         return ClientDetailScreen(id: id ?? 0);
       },
     ),
-    // Заказы
+
     GoRoute(
       path: '/orders',
       builder: (context, state) => const OrderListScreen(),
@@ -70,7 +70,7 @@ final appRouter = GoRouter(
         return OrderDetailScreen(id: id ?? 0);
       },
     ),
-    // Грузы
+
     GoRoute(
       path: '/cargo',
       builder: (context, state) => const CargoListScreen(),
@@ -93,7 +93,7 @@ final appRouter = GoRouter(
         return CargoDetailScreen(id: id ?? 0);
       },
     ),
-    // Маршруты
+
     GoRoute(
       path: '/routes',
       builder: (context, state) => const RouteListScreen(),
@@ -116,7 +116,7 @@ final appRouter = GoRouter(
         return RouteDetailScreen(id: id ?? 0);
       },
     ),
-    // Транспорт
+
     GoRoute(
       path: '/vehicles',
       builder: (context, state) => const VehicleListScreen(),

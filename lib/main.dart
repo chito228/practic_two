@@ -18,11 +18,10 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   usePathUrlStrategy();
   final prefs = await SharedPreferences.getInstance();
-  
+
   runApp(
     MultiProvider(
       providers: [
-        // Репозитории
         Provider<PersistentClientRepository>(
           create: (_) => PersistentClientRepository(prefs, 'clients_v1'),
         ),
@@ -38,7 +37,6 @@ void main() async {
         Provider<PersistentVehicleRepository>(
           create: (_) => PersistentVehicleRepository(prefs, 'vehicles_v1'),
         ),
-        // Notifiers
         ChangeNotifierProvider(
           create: (context) => ClientListNotifier(
             context.read<PersistentClientRepository>(),
@@ -70,8 +68,55 @@ void main() async {
   );
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkDataReset();
+    });
+  }
+
+  void _checkDataReset() {
+    final clientRepo = context.read<PersistentClientRepository>();
+    final orderRepo = context.read<PersistentOrderRepository>();
+    final cargoRepo = context.read<PersistentCargoRepository>();
+    final routeRepo = context.read<PersistentRouteRepository>();
+    final vehicleRepo = context.read<PersistentVehicleRepository>();
+
+    final anyReset = clientRepo.dataWasReset ||
+        orderRepo.dataWasReset ||
+        cargoRepo.dataWasReset ||
+        routeRepo.dataWasReset ||
+        vehicleRepo.dataWasReset;
+
+    if (anyReset) {
+      _showDataResetDialog();
+    }
+  }
+
+  void _showDataResetDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Формат данных изменён'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('ОК'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {

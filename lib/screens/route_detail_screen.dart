@@ -3,8 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../repositories/persistent_route_repository.dart';
 import '../repositories/persistent_vehicle_repository.dart';
+import '../repositories/persistent_order_repository.dart';
 import '../state/route_list_notifier.dart';
-import '../models/route.dart';
+import '../models/route.dart' as model;
 import '../models/vehicle.dart';
 
 class RouteDetailScreen extends StatefulWidget {
@@ -55,9 +56,9 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                     _infoRow('Откуда', route.origin),
                     _infoRow('Куда', route.destination),
                     _infoRow('Расстояние', '${route.distance} км'),
-                    _infoRow('Транспорт', 
-                      _vehicle != null 
-                        ? '${_vehicle!.plateNumber} (${_vehicle!.driverName})' 
+                    _infoRow('Транспорт',
+                      _vehicle != null
+                        ? '${_vehicle!.plateNumber} (${_vehicle!.driverName})'
                         : 'ID: ${route.vehicleId}'
                     ),
                     _infoRow('Расчётное время', '${route.estimatedTime} ч'),
@@ -160,19 +161,76 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
+    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
+    final allOrders = await orderRepo.findAllWithDeleted();
+    final relatedOrders = allOrders.where((o) => o.routeIds.contains(id) && !o.isDeleted).toList();
+
+    if (relatedOrders.isNotEmpty) {
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text(
+            'Невозможно удалить маршрут',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Этот маршрут используется в заказах:',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              ...relatedOrders.map((order) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2.0),
+                child: Text(
+                  '• Заказ #${order.orderNumber} (${order.cargoDescription})',
+                  style: const TextStyle(fontSize: 14),
+                ),
+              )),
+              const SizedBox(height: 12),
+              Text(
+                'Количество заказов: ${relatedOrders.length}',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Сначала удалите или переназначьте заказы, затем попробуйте снова.',
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK', style: TextStyle(fontSize: 14)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Удалить маршрут навсегда?'),
-        content: const Text('Это действие нельзя отменить!'),
+        title: const Text(
+          'Удалить маршрут навсегда?',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Это действие нельзя отменить!',
+          style: TextStyle(fontSize: 14),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
+            child: const Text('Отмена', style: TextStyle(fontSize: 14)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить навсегда'),
+            child: const Text('Удалить навсегда', style: TextStyle(fontSize: 14, color: Colors.red)),
           ),
         ],
       ),

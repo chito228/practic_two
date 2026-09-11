@@ -277,11 +277,9 @@ class _ClientListScreenState extends State<ClientListScreen> {
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
-    // 1. Проверяем, есть ли у клиента заказы
     final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
     final orders = await orderRepo.findByClientId(id);
-    
-    // 2. Если есть заказы → показываем диалог с запретом
+
     if (orders.isNotEmpty) {
       await showDialog(
         context: context,
@@ -338,7 +336,6 @@ class _ClientListScreenState extends State<ClientListScreen> {
       return;
     }
 
-    // 3. Если заказов нет → спрашиваем подтверждение
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -372,14 +369,13 @@ class _ClientListScreenState extends State<ClientListScreen> {
         ],
       ),
     );
-    
-    // 4. Если подтвердил → удаляем
+
     if (confirmed == true) {
       final repository = Provider.of<PersistentClientRepository>(context, listen: false);
       await repository.hardDelete(id);
       final notifier = Provider.of<ClientListNotifier>(context, listen: false);
       await notifier.load();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -392,17 +388,16 @@ class _ClientListScreenState extends State<ClientListScreen> {
   }
 
   Future<void> _confirmDelete(BuildContext context, ClientListNotifier notifier) async {
-    // Проверка массового удаления
     final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
     final clientsWithOrders = <int>[];
-    
+
     for (final id in notifier.selected) {
       final orders = await orderRepo.findByClientId(id);
       if (orders.isNotEmpty) {
         clientsWithOrders.add(id);
       }
     }
-    
+
     if (clientsWithOrders.isNotEmpty) {
       await showDialog(
         context: context,
@@ -432,7 +427,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
       );
       return;
     }
-    
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(

@@ -34,13 +34,13 @@ class OrderDetailScreen extends StatelessWidget {
           );
         }
         final order = snapshot.data!;
-        
+
         return FutureBuilder(
           future: Future.wait([
             context.read<PersistentClientRepository>().findById(order.clientId),
-            Future.wait(order.cargoIds.map((id) => 
+            Future.wait(order.cargoIds.map((id) =>
               context.read<PersistentCargoRepository>().findById(id))),
-            Future.wait(order.routeIds.map((id) => 
+            Future.wait(order.routeIds.map((id) =>
               context.read<PersistentRouteRepository>().findById(id))),
           ]),
           builder: (context, relatedSnapshot) {
@@ -68,13 +68,13 @@ class OrderDetailScreen extends StatelessWidget {
                     _infoRow('Описание груза', order.cargoDescription),
                     _infoRow('Вес', '${order.weight} кг'),
                     _infoRow('Объём', '${order.volume} м³'),
-                    _infoRow('Дата отправки', 
+                    _infoRow('Дата отправки',
                       order.shippingDate.toLocal().toString().split(' ')[0]),
                     if (order.deliveryDate != null)
-                      _infoRow('Дата доставки', 
+                      _infoRow('Дата доставки',
                         order.deliveryDate!.toLocal().toString().split(' ')[0]),
                     _infoRow('Статус', _getStatusText(order.status)),
-                    
+
                     const Divider(height: 32),
                     const Text(
                       'Грузы',
@@ -85,7 +85,7 @@ class OrderDetailScreen extends StatelessWidget {
                       ...cargoList.map((c) => _infoRow('•', c.name))
                     else
                       const Text('Нет грузов', style: TextStyle(color: Colors.grey)),
-                    
+
                     const Divider(height: 32),
                     const Text(
                       'Маршруты',
@@ -96,7 +96,7 @@ class OrderDetailScreen extends StatelessWidget {
                       ...routeList.map((r) => _infoRow('•', r.name))
                     else
                       const Text('Нет маршрутов', style: TextStyle(color: Colors.grey)),
-                    
+
                     if (order.isDeleted)
                       _infoRow('Статус', 'Скрыт', color: Colors.orange),
                     const Spacer(),
@@ -194,19 +194,103 @@ class OrderDetailScreen extends StatelessWidget {
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
+    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
+    final order = await orderRepo.findById(id);
+    if (order == null) return;
+
+    final related = <String>[];
+
+    if (order.clientId > 0) {
+      final clientRepo = Provider.of<PersistentClientRepository>(context, listen: false);
+      final client = await clientRepo.findById(order.clientId);
+      if (client != null) {
+        related.add('• Клиент: ${client.companyName}');
+      }
+    }
+
+    if (order.cargoIds.isNotEmpty) {
+      final cargoRepo = Provider.of<PersistentCargoRepository>(context, listen: false);
+      for (final cargoId in order.cargoIds) {
+        final cargo = await cargoRepo.findById(cargoId);
+        if (cargo != null) {
+          related.add('• Груз: ${cargo.name}');
+        }
+      }
+    }
+
+    if (order.routeIds.isNotEmpty) {
+      final routeRepo = Provider.of<PersistentRouteRepository>(context, listen: false);
+      for (final routeId in order.routeIds) {
+        final route = await routeRepo.findById(routeId);
+        if (route != null) {
+          related.add('• Маршрут: ${route.name}');
+        }
+      }
+    }
+
+    if (related.isNotEmpty) {
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text(
+            'Невозможно удалить заказ',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Этот заказ связан со следующими записями:',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              ...related.map((item) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2.0),
+                child: Text(item, style: const TextStyle(fontSize: 14)),
+              )),
+              const SizedBox(height: 12),
+              Text(
+                'Количество связанных записей: ${related.length}',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Сначала удалите или переназначьте связанные записи, затем попробуйте снова.',
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK', style: TextStyle(fontSize: 14)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Удалить заказ навсегда?'),
-        content: const Text('Это действие нельзя отменить!'),
+        title: const Text(
+          'Удалить заказ навсегда?',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Это действие нельзя отменить!',
+          style: TextStyle(fontSize: 14),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
+            child: const Text('Отмена', style: TextStyle(fontSize: 14)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить навсегда'),
+            child: const Text('Удалить навсегда', style: TextStyle(fontSize: 14, color: Colors.red)),
           ),
         ],
       ),

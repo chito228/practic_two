@@ -40,11 +40,9 @@ class EntityTable<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Находим индекс колонки для сортировки
     int? sortColumnIndex;
     if (sortField != null) {
       sortColumnIndex = columns.indexWhere((col) => col.sortField == sortField);
-      // Если колонка не найдена, устанавливаем null
       if (sortColumnIndex == -1) sortColumnIndex = null;
     }
 
@@ -77,11 +75,6 @@ class EntityTable<T> extends StatelessWidget {
           final isSelected = selected.contains(id);
           return DataRow(
             selected: isSelected,
-            onSelectChanged: (val) {
-              if (onToggleSelect != null && val != null) {
-                onToggleSelect!(id);
-              }
-            },
             cells: [
               if (onToggleSelect != null)
                 DataCell(

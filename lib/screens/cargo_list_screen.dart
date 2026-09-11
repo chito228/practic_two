@@ -8,6 +8,7 @@ import '../widgets/responsive_list.dart';
 import '../utils/debounce.dart';
 import '../state/load_status.dart';
 import '../repositories/persistent_cargo_repository.dart';
+import '../repositories/persistent_order_repository.dart';
 
 class CargoListScreen extends StatefulWidget {
   const CargoListScreen({super.key});
@@ -208,19 +209,76 @@ class _CargoListScreenState extends State<CargoListScreen> {
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
+    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
+    final allOrders = await orderRepo.findAllWithDeleted();
+    final relatedOrders = allOrders.where((o) => o.cargoIds.contains(id) && !o.isDeleted).toList();
+
+    if (relatedOrders.isNotEmpty) {
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text(
+            'Невозможно удалить груз',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Этот груз используется в заказах:',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              ...relatedOrders.map((order) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2.0),
+                child: Text(
+                  '• Заказ #${order.orderNumber} (${order.cargoDescription})',
+                  style: const TextStyle(fontSize: 14),
+                ),
+              )),
+              const SizedBox(height: 12),
+              Text(
+                'Количество заказов: ${relatedOrders.length}',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Сначала удалите или переназначьте заказы, затем попробуйте снова.',
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK', style: TextStyle(fontSize: 14)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Удалить груз навсегда?'),
-        content: const Text('Это действие нельзя отменить!'),
+        title: const Text(
+          'Удалить груз навсегда?',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Это действие нельзя отменить!',
+          style: TextStyle(fontSize: 14),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
+            child: const Text('Отмена', style: TextStyle(fontSize: 14)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить навсегда'),
+            child: const Text('Удалить навсегда', style: TextStyle(fontSize: 14, color: Colors.red)),
           ),
         ],
       ),
@@ -234,6 +292,41 @@ class _CargoListScreenState extends State<CargoListScreen> {
   }
 
   Future<void> _confirmDelete(BuildContext context, CargoListNotifier notifier) async {
+    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
+    final allOrders = await orderRepo.findAllWithDeleted();
+    final cargosWithOrders = <int>[];
+
+    for (final id in notifier.selected) {
+      final relatedOrders = allOrders.where((o) => o.cargoIds.contains(id) && !o.isDeleted);
+      if (relatedOrders.isNotEmpty) {
+        cargosWithOrders.add(id);
+      }
+    }
+
+    if (cargosWithOrders.isNotEmpty) {
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text(
+            'Невозможно удалить грузы',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            '${cargosWithOrders.length} груз(ов) используются в заказах.\n\n'
+            'Сначала удалите или переназначьте заказы, затем попробуйте снова.',
+            style: const TextStyle(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK', style: TextStyle(fontSize: 14)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(

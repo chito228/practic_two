@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../validators/validators.dart';
 
 enum FormFieldType {
@@ -20,6 +21,7 @@ class FormFieldConfig {
   final String? Function(dynamic)? validator;
   final int? maxLines;
   final int? maxLength;
+  final int? minLength;
   final bool required;
   final String? hintText;
 
@@ -31,34 +33,37 @@ class FormFieldConfig {
     this.validator,
     this.maxLines,
     this.maxLength,
+    this.minLength,
     this.required = true,
     this.hintText,
   });
 }
 
-class GenericForm<T> extends StatefulWidget {
-  final T entity;
+class GenericForm extends StatefulWidget {
+  final String title;
   final List<FormFieldConfig> fields;
-  final Future<void> Function(T) onSubmit;
+  final Future<void> Function(Map<String, dynamic> values) onSubmit;
   final bool isEditing;
   final Map<String, dynamic> initialValues;
   final Map<String, List<dynamic>>? optionsData;
+  final VoidCallback? onCancel;
 
   const GenericForm({
     super.key,
-    required this.entity,
+    required this.title,
     required this.fields,
     required this.onSubmit,
     required this.isEditing,
     required this.initialValues,
     this.optionsData,
+    this.onCancel,
   });
 
   @override
-  State<GenericForm<T>> createState() => _GenericFormState<T>();
+  State<GenericForm> createState() => _GenericFormState();
 }
 
-class _GenericFormState<T> extends State<GenericForm<T>> {
+class _GenericFormState extends State<GenericForm> {
   final _formKey = GlobalKey<FormState>();
   late Map<String, dynamic> _values;
   bool _isSaving = false;
@@ -78,16 +83,18 @@ class _GenericFormState<T> extends State<GenericForm<T>> {
         if (didPop) return;
         if (_hasUnsavedChanges) {
           final shouldLeave = await _showUnsavedChangesDialog();
-          if (shouldLeave) {
-            Navigator.pop(context);
-          }
+          if (shouldLeave && mounted) _handleCancel();
         } else {
-          Navigator.pop(context);
+          _handleCancel();
         }
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(widget.isEditing ? 'Редактирование' : 'Создание'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: _handleCancel,
+          ),
+          title: Text(widget.title),
         ),
         body: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -102,7 +109,7 @@ class _GenericFormState<T> extends State<GenericForm<T>> {
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       ElevatedButton(
-                        onPressed: () => Navigator.pop(context),
+                        onPressed: _handleCancel,
                         child: const Text('Отмена'),
                       ),
                       ElevatedButton(
@@ -126,128 +133,183 @@ class _GenericFormState<T> extends State<GenericForm<T>> {
     );
   }
 
+  void _handleCancel() {
+    if (widget.onCancel != null) {
+      widget.onCancel!();
+    } else {
+      Navigator.pop(context);
+    }
+  }
+
   Widget _buildField(FormFieldConfig config) {
     final value = _values[config.key];
 
     switch (config.type) {
       case FormFieldType.text:
-        return TextFormField(
-          initialValue: value?.toString(),
-          decoration: InputDecoration(
-            labelText: config.label,
-            hintText: config.hintText,
-            border: const OutlineInputBorder(),
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
+          child: TextFormField(
+            initialValue: value?.toString(),
+            decoration: InputDecoration(
+              labelText: config.label,
+              hintText: config.hintText,
+              border: const OutlineInputBorder(),
+              counterText: '',
+            ),
+            maxLines: config.maxLines ?? 1,
+            inputFormatters: config.maxLength != null
+                ? [LengthLimitingTextInputFormatter(config.maxLength)]
+                : null,
+            onChanged: (v) {
+              _values[config.key] = v;
+              _hasUnsavedChanges = true;
+            },
+            validator: (v) => _validateField(config, v),
           ),
-          maxLines: config.maxLines ?? 1,
-          maxLength: config.maxLength,
-          onChanged: (_) => _hasUnsavedChanges = true,
-          onSaved: (v) => _values[config.key] = v ?? '',
-          validator: (v) => _validateField(config, v),
         );
 
       case FormFieldType.number:
-        return TextFormField(
-          initialValue: value?.toString(),
-          decoration: InputDecoration(
-            labelText: config.label,
-            hintText: config.hintText,
-            border: const OutlineInputBorder(),
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
+          child: TextFormField(
+            initialValue: value?.toString(),
+            decoration: InputDecoration(
+              labelText: config.label,
+              hintText: config.hintText,
+              border: const OutlineInputBorder(),
+              counterText: '',
+            ),
+            keyboardType: TextInputType.number,
+            onChanged: (v) {
+              _values[config.key] = v;
+              _hasUnsavedChanges = true;
+            },
+            validator: (v) => _validateField(config, v),
           ),
-          keyboardType: TextInputType.number,
-          onChanged: (_) => _hasUnsavedChanges = true,
-          onSaved: (v) => _values[config.key] = int.tryParse(v ?? '') ?? 0,
-          validator: (v) => _validateField(config, v),
         );
 
       case FormFieldType.double:
-        return TextFormField(
-          initialValue: value?.toString(),
-          decoration: InputDecoration(
-            labelText: config.label,
-            hintText: config.hintText,
-            border: const OutlineInputBorder(),
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
+          child: TextFormField(
+            initialValue: value?.toString(),
+            decoration: InputDecoration(
+              labelText: config.label,
+              hintText: config.hintText,
+              border: const OutlineInputBorder(),
+              counterText: '',
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (v) {
+              _values[config.key] = v;
+              _hasUnsavedChanges = true;
+            },
+            validator: (v) => _validateField(config, v),
           ),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          onChanged: (_) => _hasUnsavedChanges = true,
-          onSaved: (v) => _values[config.key] = double.tryParse(v ?? '') ?? 0.0,
-          validator: (v) => _validateField(config, v),
         );
 
       case FormFieldType.email:
-        return TextFormField(
-          initialValue: value?.toString(),
-          decoration: InputDecoration(
-            labelText: config.label,
-            hintText: config.hintText,
-            border: const OutlineInputBorder(),
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
+          child: TextFormField(
+            initialValue: value?.toString(),
+            decoration: InputDecoration(
+              labelText: config.label,
+              hintText: config.hintText,
+              border: const OutlineInputBorder(),
+              counterText: '',
+            ),
+            keyboardType: TextInputType.emailAddress,
+            onChanged: (v) {
+              _values[config.key] = v;
+              _hasUnsavedChanges = true;
+            },
+            validator: (v) => _validateField(config, v),
           ),
-          keyboardType: TextInputType.emailAddress,
-          onChanged: (_) => _hasUnsavedChanges = true,
-          onSaved: (v) => _values[config.key] = v ?? '',
-          validator: (v) => _validateField(config, v),
         );
 
       case FormFieldType.phone:
-        return TextFormField(
-          initialValue: value?.toString(),
-          decoration: InputDecoration(
-            labelText: config.label,
-            hintText: config.hintText,
-            border: const OutlineInputBorder(),
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
+          child: TextFormField(
+            initialValue: value?.toString(),
+            decoration: InputDecoration(
+              labelText: config.label,
+              hintText: config.hintText,
+              border: const OutlineInputBorder(),
+              counterText: '',
+            ),
+            keyboardType: TextInputType.phone,
+            onChanged: (v) {
+              _values[config.key] = v;
+              _hasUnsavedChanges = true;
+            },
+            validator: (v) => _validateField(config, v),
           ),
-          keyboardType: TextInputType.phone,
-          onChanged: (_) => _hasUnsavedChanges = true,
-          onSaved: (v) => _values[config.key] = v ?? '',
-          validator: (v) => _validateField(config, v),
         );
 
       case FormFieldType.dropdown:
-        return DropdownButtonFormField<dynamic>(
-          value: value,
-          decoration: InputDecoration(
-            labelText: config.label,
-            border: const OutlineInputBorder(),
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
+          child: DropdownButtonFormField<dynamic>(
+            value: value,
+            decoration: InputDecoration(
+              labelText: config.label,
+              border: const OutlineInputBorder(),
+            ),
+            items: config.options,
+            onChanged: (v) {
+              setState(() {
+                _values[config.key] = v;
+                _hasUnsavedChanges = true;
+              });
+            },
+            validator: (v) => _validateField(config, v),
           ),
-          items: config.options,
-          onChanged: (v) {
-            setState(() {
-              _values[config.key] = v;
-              _hasUnsavedChanges = true;
-            });
-          },
-          onSaved: (v) => _values[config.key] = v,
-          validator: (v) => _validateField(config, v),
         );
 
       case FormFieldType.multiSelect:
-        return _buildMultiSelectField(config);
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
+          child: _buildMultiSelectField(config),
+        );
 
       case FormFieldType.date:
-        return TextFormField(
-          initialValue: value?.toString().split(' ')[0],
-          decoration: InputDecoration(
-            labelText: config.label,
-            hintText: 'ГГГГ-ММ-ДД',
-            border: const OutlineInputBorder(),
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.calendar_today),
-              onPressed: () => _selectDate(config.key),
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
+          child: TextFormField(
+            key: ValueKey('${config.key}_${value?.toString()}'),
+            initialValue: value != null
+                ? (value is DateTime
+                    ? value.toLocal().toString().split(' ')[0]
+                    : value.toString())
+                : null,
+            decoration: InputDecoration(
+              labelText: config.label,
+              hintText: 'ГГГГ-ММ-ДД',
+              border: const OutlineInputBorder(),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.calendar_today),
+                onPressed: () => _selectDate(config.key),
+              ),
+              counterText: '',
             ),
+            readOnly: true,
+            onTap: () => _selectDate(config.key),
+            validator: (v) => _validateField(config, v),
           ),
-          readOnly: true,
-          onTap: () => _selectDate(config.key),
-          validator: (v) => _validateField(config, v),
         );
     }
   }
 
   Widget _buildMultiSelectField(FormFieldConfig config) {
-    final selectedIds = _values[config.key] as List<int>? ?? [];
+    final selectedIds = (_values[config.key] as List<int>?) ?? [];
     final items = widget.optionsData?[config.key] ?? [];
 
     return FormField<List<int>>(
       initialValue: selectedIds,
-      validator: (value) => (value?.isEmpty ?? true) ? 'Выберите хотя бы один элемент' : null,
+      validator: (value) =>
+          (value?.isEmpty ?? true) ? 'Выберите хотя бы один элемент' : null,
       builder: (field) {
         return InputDecorator(
           decoration: InputDecoration(
@@ -255,39 +317,50 @@ class _GenericFormState<T> extends State<GenericForm<T>> {
             border: const OutlineInputBorder(),
             errorText: field.errorText,
           ),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: items.map((item) {
-              final id = (item as dynamic).id as int;
-              final name = (item as dynamic).name?.toString() ??
-                  (item as dynamic).fullName?.toString() ??
-                  'ID $id';
-              final selected = field.value!.contains(id);
-              return FilterChip(
-                label: Text(name),
-                selected: selected,
-                onSelected: (_) {
-                  final next = [...field.value!];
-                  selected ? next.remove(id) : next.add(id);
-                  field.didChange(next);
-                  setState(() {
-                    _values[config.key] = next;
-                    _hasUnsavedChanges = true;
-                  });
-                },
-              );
-            }).toList(),
-          ),
+          child: items.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'Нет доступных значений',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                )
+              : Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: items.map((item) {
+                    final id = (item as dynamic).id as int;
+                    final name = (item as dynamic).name?.toString() ??
+                        (item as dynamic).fullName?.toString() ??
+                        (item as dynamic).companyName?.toString() ??
+                        (item as dynamic).plateNumber?.toString() ??
+                        'ID $id';
+                    final selected = field.value!.contains(id);
+                    return FilterChip(
+                      label: Text(name),
+                      selected: selected,
+                      onSelected: (_) {
+                        final next = [...field.value!];
+                        selected ? next.remove(id) : next.add(id);
+                        field.didChange(next);
+                        setState(() {
+                          _values[config.key] = next;
+                          _hasUnsavedChanges = true;
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
         );
       },
     );
   }
 
   Future<void> _selectDate(String key) async {
+    final current = _values[key];
     final date = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
+      initialDate: current is DateTime ? current : DateTime.now(),
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
     );
@@ -310,7 +383,6 @@ class _GenericFormState<T> extends State<GenericForm<T>> {
       return config.validator!(value);
     }
 
-    // Стандартные валидации по типу
     switch (config.type) {
       case FormFieldType.email:
         return Validators.email(strValue);
@@ -320,6 +392,18 @@ class _GenericFormState<T> extends State<GenericForm<T>> {
         return Validators.positiveNumber(strValue, config.label);
       case FormFieldType.double:
         return Validators.positiveDouble(strValue, config.label);
+      case FormFieldType.text:
+        if (config.minLength != null &&
+            strValue.isNotEmpty &&
+            strValue.length < config.minLength!) {
+          return '${config.label} должно быть не короче ${config.minLength} символов';
+        }
+        if (config.maxLength != null &&
+            strValue.isNotEmpty &&
+            strValue.length > config.maxLength!) {
+          return '${config.label} не может быть длиннее ${config.maxLength} символов';
+        }
+        return null;
       default:
         return null;
     }
@@ -330,7 +414,8 @@ class _GenericFormState<T> extends State<GenericForm<T>> {
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Несохранённые изменения'),
-            content: const Text('У вас есть несохранённые изменения. Вы уверены, что хотите выйти?'),
+            content: const Text(
+                'У вас есть несохранённые изменения. Вы уверены, что хотите выйти?'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
@@ -348,14 +433,11 @@ class _GenericFormState<T> extends State<GenericForm<T>> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    _formKey.currentState!.save();
 
     setState(() => _isSaving = true);
 
     try {
-      // Обновляем entity новыми значениями
-      final updatedEntity = _updateEntity(widget.entity, _values);
-      await widget.onSubmit(updatedEntity);
+      await widget.onSubmit(_values);
       _hasUnsavedChanges = false;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -363,7 +445,6 @@ class _GenericFormState<T> extends State<GenericForm<T>> {
             content: Text(widget.isEditing ? 'Запись обновлена' : 'Запись создана'),
           ),
         );
-        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
@@ -376,10 +457,5 @@ class _GenericFormState<T> extends State<GenericForm<T>> {
         setState(() => _isSaving = false);
       }
     }
-  }
-
-  T _updateEntity(T entity, Map<String, dynamic> values) {
-    // Это должно быть реализовано в наследниках
-    return entity;
   }
 }
