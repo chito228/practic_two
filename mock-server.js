@@ -153,8 +153,8 @@ function seed() {
 
   // ─── Пользователи ───
   push('users', { username: 'admin', passwordHash: hash('admin123'), fullName: 'Администратор', email: 'admin@logist.local', role: 'admin' });
-  push('users', { username: 'librarian', passwordHash: hash('librarian123'), fullName: 'Петрова А. С.', email: 'petrova@logist.local', role: 'librarian' });
-  push('users', { username: 'reader', passwordHash: hash('reader123'), fullName: 'Смирнов П. А.', email: 'smirnov@example.com', role: 'reader' });
+  push('users', { username: 'logist', passwordHash: hash('logist123'), fullName: 'Логинов Л. Л.', email: 'logist@logist.local', role: 'logist' });
+  push('users', { username: 'manager', passwordHash: hash('manager123'), fullName: 'Руководителев Р. Р.', email: 'manager@logist.local', role: 'manager' });
 }
 
 function push(collection, obj) {
@@ -473,14 +473,18 @@ function currentUser(req) {
   return db.users.find((u) => u.id === payload.sub && !u.deletedAt) || null;
 }
 
-const ROLE_LEVEL = { reader: 1, librarian: 2, admin: 3 };
+// ─── РОЛИ ───
+// manager (1) — Руководитель. Аналитика, просмотр.
+// logist  (2) — Логист. Операции: заказы, маршруты, клиенты.
+// admin   (3) — Администратор. Управление системой.
+const ROLE_LEVEL = { manager: 1, logist: 2, admin: 3 };
 
 function requireRole(res, user, minRole) {
   if (!user) {
     fail(res, 401, 'Требуется аутентификация');
     return false;
   }
-  if (ROLE_LEVEL[user.role] < ROLE_LEVEL[minRole]) {
+  if ((ROLE_LEVEL[user.role] || 0) < ROLE_LEVEL[minRole]) {
     fail(res, 403, `Операция доступна начиная с роли «${minRole}»`);
     return false;
   }
@@ -488,6 +492,19 @@ function requireRole(res, user, minRole) {
 }
 
 const COLLECTIONS = ['clients', 'orders', 'cargo', 'routes', 'vehicles'];
+
+// ─────────────────────────── правило доступа по сущностям ───────────────────────────
+
+/**
+ * Минимальная роль для операций создания/изменения/удаления.
+ * - clients, orders, routes: logist (и admin)
+ * - cargo, vehicles:         admin
+ *   (logist может только менять статус транспорта — отдельным эндпоинтом)
+ */
+function requiredRoleFor(collection) {
+  if (collection === 'cargo' || collection === 'vehicles') return 'admin';
+  return 'logist';
+}
 
 // ─────────────────────────────── маршруты ───────────────────────────────
 
@@ -536,7 +553,7 @@ async function handle(req, res, url) {
       passwordHash: hash(password),
       fullName: String(body.fullName || username),
       email: String(body.email || ''),
-      role: 'reader',
+      role: 'manager',
     });
     return send(res, 201, expandUser(db.users.find((u) => u.id === id)));
   }
@@ -596,11 +613,93 @@ async function handle(req, res, url) {
   }
 
   // ── управление пользователями (только admin) ──
+
+  // Список пользователей
   if (path === '/api/users' && method === 'GET') {
     if (!requireRole(res, user, 'admin')) return;
     const rows = applySort(db.users.filter((u) => !u.deletedAt), q.sort);
     const page = paginate(rows, q);
     return send(res, 200, { ...page, items: page.items.map(expandUser) });
+  }
+
+  // Создание пользователя
+  if (path === '/api/users' && method === 'POST') {
+    if (!requireRole(res, user, 'admin')) return;
+    const body = await readBody(req);
+    if (!body) return fail(res, 400, 'Тело запроса не является корректным JSON');
+
+    const errors = {};
+    const username = String(body.username || '').trim();
+    const password = String(body.password || '');
+    const role = String(body.role || 'manager');
+
+    if (username.length < 3) errors.username = 'Логин не короче трёх символов';
+    else if (db.users.find((u) => u.username === username && !u.deletedAt)) errors.username = 'Такой логин уже занят';
+    if (password.length < 8) errors.password = 'Пароль не короче восьми символов';
+    if (!['manager', 'logist', 'admin'].includes(role)) errors.role = 'Недопустимая роль';
+
+    if (Object.keys(errors).length) {
+      return send(res, 422, { message: 'Ошибка валидации', errors });
+    }
+
+    const id = push('users', {
+      username,
+      passwordHash: hash(password),
+      fullName: String(body.fullName || username),
+      email: String(body.email || ''),
+      role,
+    });
+    return send(res, 201, expandUser(db.users.find((u) => u.id === id)));
+  }
+
+  // Смена роли / редактирование пользователя
+  let userMatch = path.match(/^\/api\/users\/(\d+)$/);
+  if (userMatch && (method === 'PATCH' || method === 'PUT')) {
+    if (!requireRole(res, user, 'admin')) return;
+    const id = Number(userMatch[1]);
+    const u = db.users.find((x) => x.id === id && !x.deletedAt);
+    if (!u) return fail(res, 404, 'Пользователь не найден');
+
+    const body = await readBody(req);
+    if (!body) return fail(res, 400, 'Тело запроса не является корректным JSON');
+
+    if (body.role) {
+      if (!['manager', 'logist', 'admin'].includes(body.role)) {
+        return send(res, 422, { message: 'Ошибка валидации', errors: { role: 'Недопустимая роль' } });
+      }
+      u.role = body.role;
+    }
+    if (body.fullName) u.fullName = String(body.fullName);
+    if (body.email) u.email = String(body.email);
+    if (body.password) u.passwordHash = hash(String(body.password));
+
+    return send(res, 200, expandUser(u));
+  }
+
+  // Удаление пользователя (soft)
+  if (userMatch && method === 'DELETE') {
+    if (!requireRole(res, user, 'admin')) return;
+    const id = Number(userMatch[1]);
+    const u = db.users.find((x) => x.id === id && !x.deletedAt);
+    if (!u) return fail(res, 404, 'Пользователь не найден');
+    if (u.id === user.id) return fail(res, 409, 'Нельзя удалить самого себя');
+    u.deletedAt = new Date().toISOString();
+    return send(res, 204);
+  }
+
+  // ── смена статуса транспорта (logist + admin) ──
+  let statusMatch = path.match(/^\/api\/vehicles\/(\d+)\/status$/);
+  if (statusMatch && method === 'PATCH') {
+    if (!requireRole(res, user, 'logist')) return;
+    const id = Number(statusMatch[1]);
+    const body = await readBody(req);
+    if (!body || typeof body.status !== 'string') {
+      return fail(res, 400, 'Ожидается поле status');
+    }
+    const v = db.vehicles.find((x) => x.id === id && !x.deletedAt);
+    if (!v) return fail(res, 404, 'Транспорт не найден');
+    v.status = body.status;
+    return send(res, 200, expandVehicle(v));
   }
 
   // ── единообразный CRUD ──
@@ -610,7 +709,12 @@ async function handle(req, res, url) {
   if (bulk && method === 'POST') {
     const collection = bulk[1];
     if (!COLLECTIONS.includes(collection)) return fail(res, 404, 'Ресурс не найден');
-    if (!requireRole(res, user, 'librarian')) return;
+
+    // Массовое скрытие:
+    // - clients/orders/routes — logist и admin
+    // - cargo/vehicles         — только admin
+    const minRole = requiredRoleFor(collection);
+    if (!requireRole(res, user, minRole)) return;
 
     const body = await readBody(req);
     const ids = Array.isArray(body && body.ids) ? body.ids.map(Number) : [];
@@ -637,8 +741,11 @@ async function handle(req, res, url) {
     const expand = EXPANDERS[collection];
 
     // восстановление
+    // - clients/orders/routes — logist и admin
+    // - cargo/vehicles         — только admin
     if (action === 'restore' && method === 'POST') {
-      if (!requireRole(res, user, 'admin')) return;
+      const minRole = requiredRoleFor(collection);
+      if (!requireRole(res, user, minRole)) return;
       const row = db[collection].find((x) => x.id === id);
       if (!row) return fail(res, 404, 'Объект не найден');
       row.deletedAt = null;
@@ -664,8 +771,11 @@ async function handle(req, res, url) {
     }
 
     // создание
+    // - clients/orders/routes — logist и admin
+    // - cargo/vehicles         — только admin
     if (id === null && method === 'POST') {
-      if (!requireRole(res, user, 'librarian')) return;
+      const minRole = requiredRoleFor(collection);
+      if (!requireRole(res, user, minRole)) return;
       const body = await readBody(req);
       if (!body) return fail(res, 400, 'Тело запроса не является корректным JSON');
 
@@ -679,8 +789,11 @@ async function handle(req, res, url) {
     }
 
     // изменение
+    // - clients/orders/routes — logist и admin
+    // - cargo/vehicles         — только admin
     if (id !== null && (method === 'PUT' || method === 'PATCH')) {
-      if (!requireRole(res, user, 'librarian')) return;
+      const minRole = requiredRoleFor(collection);
+      if (!requireRole(res, user, minRole)) return;
       const row = db[collection].find((x) => x.id === id && !x.deletedAt);
       if (!row) return fail(res, 404, 'Объект не найден');
 
@@ -696,9 +809,19 @@ async function handle(req, res, url) {
     }
 
     // удаление
+    // - hard:  только admin (все сущности)
+    // - soft:  clients/orders/routes — logist и admin
+    //          cargo/vehicles         — только admin
     if (id !== null && method === 'DELETE') {
       const hard = q.hard === 'true';
-      if (!requireRole(res, user, hard ? 'admin' : 'librarian')) return;
+
+      let minRole;
+      if (hard) {
+        minRole = 'admin';
+      } else {
+        minRole = requiredRoleFor(collection);
+      }
+      if (!requireRole(res, user, minRole)) return;
 
       const index = db[collection].findIndex((x) => x.id === id);
       if (index === -1) return fail(res, 404, 'Объект не найден');
@@ -824,7 +947,8 @@ server.listen(PORT, () => {
   console.log(`  Разрешённый источник: ${ORIGIN}`);
   console.log(`  Срок жизни токена:  ${ACCESS_TTL} с`);
   console.log('');
-  console.log('  Учётные записи:  admin/admin123   librarian/librarian123   reader/reader123');
+  console.log('  Роли:            manager (1)  logist (2)  admin (3)');
+  console.log('  Учётные записи:  admin/admin123   logist/logist123   manager/manager123');
   console.log('  Сброс данных:    POST /api/__reset');
   console.log('  Задержка ответа: любой запрос с ?__delay=1500');
   console.log('  Ошибка по требованию: любой запрос с ?__fail=500');

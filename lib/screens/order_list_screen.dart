@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../core/reference_cache.dart';
+import '../models/role.dart';
+import '../state/auth_notifier.dart';
 import '../state/order_list_notifier.dart';
 import '../models/order.dart';
 import '../widgets/entity_table.dart';
@@ -49,7 +51,6 @@ class _OrderListScreenState extends State<OrderListScreen> {
       });
     } catch (_) {
       // Игнорируем: имена клиентов — вторичные данные.
-      // Если загрузка не удалась, в списке покажем «Клиент ID».
     }
   }
 
@@ -62,6 +63,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
   @override
   Widget build(BuildContext context) {
     final notifier = Provider.of<OrderListNotifier>(context);
+    final auth = context.watch<AuthNotifier>();
 
     return Scaffold(
       appBar: AppBar(
@@ -184,7 +186,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
               ),
             ),
           Expanded(
-            child: _buildContent(notifier),
+            child: _buildContent(notifier, auth),
           ),
           if (notifier.status == LoadStatus.success && notifier.result.total > 0)
             Padding(
@@ -208,10 +210,12 @@ class _OrderListScreenState extends State<OrderListScreen> {
             ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => context.go('/orders/create'),
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: auth.uiHas(Role.logist)
+          ? FloatingActionButton(
+              onPressed: () => context.go('/orders/create'),
+              child: const Icon(Icons.add),
+            )
+          : null,
     );
   }
 
@@ -224,7 +228,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
     }
   }
 
-  Widget _buildContent(OrderListNotifier notifier) {
+  Widget _buildContent(OrderListNotifier notifier, AuthNotifier auth) {
     switch (notifier.status) {
       case LoadStatus.idle:
       case LoadStatus.loading:
@@ -303,32 +307,35 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 ),
                 child: const Text('Показать', style: TextStyle(fontSize: 12)),
               ),
-              TextButton(
-                onPressed: () => context.go('/orders/${o.id}/edit'),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  minimumSize: Size.zero,
+              if (auth.uiHas(Role.logist))
+                TextButton(
+                  onPressed: () => context.go('/orders/${o.id}/edit'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    minimumSize: Size.zero,
+                  ),
+                  child: const Text('Ред.', style: TextStyle(fontSize: 12)),
                 ),
-                child: const Text('Ред.', style: TextStyle(fontSize: 12)),
-              ),
-              TextButton(
-                onPressed: () => _softDelete(context, o.id),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  minimumSize: Size.zero,
-                  foregroundColor: Colors.orange,
+              if (auth.uiHas(Role.logist))
+                TextButton(
+                  onPressed: () => _softDelete(context, o.id),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    minimumSize: Size.zero,
+                    foregroundColor: Colors.orange,
+                  ),
+                  child: const Text('Скрыть', style: TextStyle(fontSize: 12)),
                 ),
-                child: const Text('Скрыть', style: TextStyle(fontSize: 12)),
-              ),
-              TextButton(
-                onPressed: () => _hardDelete(context, o.id),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  minimumSize: Size.zero,
-                  foregroundColor: Colors.red,
+              if (auth.uiHas(Role.admin))
+                TextButton(
+                  onPressed: () => _hardDelete(context, o.id),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    minimumSize: Size.zero,
+                    foregroundColor: Colors.red,
+                  ),
+                  child: const Text('Удалить', style: TextStyle(fontSize: 12)),
                 ),
-                child: const Text('Удалить', style: TextStyle(fontSize: 12)),
-              ),
             ],
           ),
         );

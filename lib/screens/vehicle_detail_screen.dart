@@ -1,8 +1,12 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import '../core/api_exceptions.dart';
+import '../models/role.dart';
 import '../repositories/vehicle_repository.dart';
 import '../repositories/route_repository.dart';
+import '../state/auth_notifier.dart';
 import '../state/vehicle_list_notifier.dart';
 
 class VehicleDetailScreen extends StatelessWidget {
@@ -12,6 +16,8 @@ class VehicleDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final repository = Provider.of<VehicleRepository>(context);
+    final auth = context.watch<AuthNotifier>();
+
     return FutureBuilder(
       future: repository.findById(id),
       builder: (context, snapshot) {
@@ -39,7 +45,39 @@ class VehicleDetailScreen extends StatelessWidget {
                 _infoRow('Номер машины', vehicle.plateNumber),
                 _infoRow('Водитель', vehicle.driverName),
                 _infoRow('Грузоподъёмность', '${vehicle.capacity} тонн'),
-                _infoRow('Статус', _getStatusText(vehicle.status)),
+
+                // Смена статуса — для logist и admin.
+                if (auth.uiHas(Role.logist))
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: Row(
+                      children: [
+                        const SizedBox(
+                          width: 120,
+                          child: Text(
+                            'Статус:',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        DropdownButton<String>(
+                          value: vehicle.status,
+                          items: const [
+                            DropdownMenuItem(value: 'active', child: Text('В работе')),
+                            DropdownMenuItem(value: 'maintenance', child: Text('На обслуживании')),
+                            DropdownMenuItem(value: 'repair', child: Text('В ремонте')),
+                          ],
+                          onChanged: (v) {
+                            if (v != null && v != vehicle.status) {
+                              _changeStatus(context, vehicle.id, v);
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  _infoRow('Статус', _getStatusText(vehicle.status)),
+
                 _infoRow('Количество маршрутов', vehicle.routeIds.length.toString()),
 
                 const Divider(height: 32),
@@ -125,6 +163,39 @@ class VehicleDetailScreen extends StatelessWidget {
     );
   }
 
+  // ─────────────────────────────────────────────────────
+  // Смена статуса транспорта (logist+)
+  // ─────────────────────────────────────────────────────
+  Future<void> _changeStatus(BuildContext context, int id, String newStatus) async {
+    try {
+      final dio = context.read<Dio>();
+      await dio.patch('/vehicles/$id/status', data: {'status': newStatus});
+    } on ForbiddenException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    }
+
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Статус обновлён')),
+    );
+    // Перезагружаем экран, чтобы обновлённый статус отобразился.
+    if (context.mounted) {
+      context.go('/vehicles/$id');
+    }
+  }
+
   Future<void> _softDelete(BuildContext context, int id) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -143,21 +214,61 @@ class VehicleDetailScreen extends StatelessWidget {
         ],
       ),
     );
-    if (confirmed == true) {
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    try {
       final repository = Provider.of<VehicleRepository>(context, listen: false);
       await repository.softDelete(id);
-      final notifier = Provider.of<VehicleListNotifier>(context, listen: false);
-      await notifier.load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Транспорт скрыт')),
-      );
-      context.go('/vehicles');
+    } on ForbiddenException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    } on ConflictException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
     }
+
+    if (!context.mounted) return;
+    final notifier = Provider.of<VehicleListNotifier>(context, listen: false);
+    await notifier.load();
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Транспорт скрыт')),
+    );
+    context.go('/vehicles');
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
     final routeRepo = Provider.of<RouteRepository>(context, listen: false);
-    final routes = await routeRepo.findByVehicleId(id);
+
+    List<dynamic> routes;
+    try {
+      routes = await routeRepo.findByVehicleId(id);
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+      return;
+    }
+    if (!context.mounted) return;
 
     if (routes.isNotEmpty) {
       await showDialog(
@@ -226,16 +337,44 @@ class VehicleDetailScreen extends StatelessWidget {
         ],
       ),
     );
-    if (confirmed == true) {
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    try {
       final repository = Provider.of<VehicleRepository>(context, listen: false);
       await repository.hardDelete(id);
-      final notifier = Provider.of<VehicleListNotifier>(context, listen: false);
-      await notifier.load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Транспорт удалён навсегда')),
-      );
-      context.go('/vehicles');
+    } on ForbiddenException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    } on ConflictException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
     }
+
+    if (!context.mounted) return;
+    final notifier = Provider.of<VehicleListNotifier>(context, listen: false);
+    await notifier.load();
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Транспорт удалён навсегда')),
+    );
+    context.go('/vehicles');
   }
 
   Future<void> _restore(BuildContext context, int id) async {
@@ -256,15 +395,43 @@ class VehicleDetailScreen extends StatelessWidget {
         ],
       ),
     );
-    if (confirmed == true) {
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    try {
       final repository = Provider.of<VehicleRepository>(context, listen: false);
       await repository.restore(id);
-      final notifier = Provider.of<VehicleListNotifier>(context, listen: false);
-      await notifier.load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Транспорт восстановлен')),
-      );
-      context.go('/vehicles');
+    } on ForbiddenException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    } on ConflictException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
     }
+
+    if (!context.mounted) return;
+    final notifier = Provider.of<VehicleListNotifier>(context, listen: false);
+    await notifier.load();
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Транспорт восстановлен')),
+    );
+    context.go('/vehicles');
   }
 }

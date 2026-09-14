@@ -1,19 +1,27 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+
 import 'api_exceptions.dart';
-import 'auth_session.dart';
 import 'config.dart';
 
 /// Собирает Dio с интерсепторами: логирование, авторизация,
 /// обновление токена, повтор при сетевом сбое.
-Dio buildDio(AuthSession session) {
+///
+/// Не знает про AuthNotifier напрямую — принимает колбэки:
+/// - [tokenProvider] — отдаёт текущий accessToken (или null).
+/// - [onRefresh] — вызывает refresh; true, если удалось.
+/// - [onUnauthorized] — вызывается на 401 после неудачного refresh.
+Dio buildDio({
+  String? Function()? tokenProvider,
+  Future<bool> Function()? onRefresh,
+  void Function()? onUnauthorized,
+}) {
   final dio = Dio(
     BaseOptions(
       baseUrl: apiBaseUrl,
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 15),
       headers: {'Content-Type': 'application/json'},
-      // Не бросать исключение на кодах 4xx — разберём их сами.
       validateStatus: (status) => status != null && status < 500,
     ),
   );
@@ -21,8 +29,8 @@ Dio buildDio(AuthSession session) {
   dio.interceptors.add(
     InterceptorsWrapper(
       onRequest: (options, handler) {
-        final token = session.accessToken;
-        if (token != null) {
+        final token = tokenProvider?.call();
+        if (token != null && token.isNotEmpty) {
           options.headers['Authorization'] = 'Bearer $token';
         }
         if (kDebugMode) {
@@ -36,12 +44,8 @@ Dio buildDio(AuthSession session) {
             '[API ←] ${response.statusCode} ${response.requestOptions.uri}',
           );
         }
-        // Коды 4xx попадают сюда (validateStatus < 500).
         final status = response.statusCode ?? 0;
         if (status >= 400) {
-          // Просто throw нельзя: Dio завернёт исключение из интерсептора
-          // в DioException с типом unknown, а наш ValidationException
-          // окажется спрятан внутри error.
           return handler.reject(
             DioException(
               requestOptions: response.requestOptions,
@@ -58,24 +62,27 @@ Dio buildDio(AuthSession session) {
         final status = error.response?.statusCode;
         final path = error.requestOptions.path;
 
-        // 401 на защищённом адресе → пробуем обновить токен и повторить.
-        // Условие !path.contains('/auth/') обязательно:
-        // без него неудачный логин вызовет refresh, тот вернёт 401,
-        // и получится бесконечный цикл.
+        // 401 на защищённом адресе → пробуем refresh и повтор.
+        // Условие !path.contains('/auth/') обязательно: без него
+        // неудачный логин вызовет refresh, тот вернёт 401 — цикл.
         if (status == 401 && !path.contains('/auth/')) {
-          final ok = await session.refresh(dio);
-          if (ok) {
-            final options = error.requestOptions;
-            options.headers['Authorization'] = 'Bearer ${session.accessToken}';
-            try {
-              final response = await dio.fetch(options);
-              return handler.resolve(response);
-            } on DioException catch (e) {
-              return handler.next(e);
+          if (onRefresh != null) {
+            final ok = await onRefresh();
+            if (ok) {
+              try {
+                final options = error.requestOptions;
+                final freshToken = tokenProvider?.call();
+                if (freshToken != null) {
+                  options.headers['Authorization'] = 'Bearer $freshToken';
+                }
+                final response = await dio.fetch(options);
+                return handler.resolve(response);
+              } on DioException catch (e) {
+                return handler.next(e);
+              }
             }
-          } else {
-            session.clear();
           }
+          onUnauthorized?.call();
         }
 
         if (kDebugMode) {
@@ -112,7 +119,6 @@ class RetryInterceptor extends Interceptor {
       return handler.next(err);
     }
 
-    // Нарастающая пауза: 300 мс, 600 мс, 1200 мс.
     final delay = Duration(milliseconds: 300 * (1 << attempt));
     await Future.delayed(delay);
 

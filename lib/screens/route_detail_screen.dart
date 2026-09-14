@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import '../core/api_exceptions.dart';
 import '../repositories/route_repository.dart';
 import '../repositories/vehicle_repository.dart';
 import '../repositories/order_repository.dart';
@@ -147,22 +148,64 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
         ],
       ),
     );
-    if (confirmed == true) {
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    try {
       final repository = Provider.of<RouteRepository>(context, listen: false);
       await repository.softDelete(id);
-      final notifier = Provider.of<RouteListNotifier>(context, listen: false);
-      await notifier.load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Маршрут скрыт')),
-      );
-      context.go('/routes');
+    } on ForbiddenException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    } on ConflictException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
     }
+
+    if (!context.mounted) return;
+    final notifier = Provider.of<RouteListNotifier>(context, listen: false);
+    await notifier.load();
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Маршрут скрыт')),
+    );
+    context.go('/routes');
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
     final orderRepo = Provider.of<OrderRepository>(context, listen: false);
-    final allOrders = await orderRepo.findAll(includeDeleted: true);
-    final relatedOrders = allOrders.where((o) => o.routeIds.contains(id) && !o.isDeleted).toList();
+
+    List<dynamic> allOrders;
+    try {
+      allOrders = await orderRepo.findAll(includeDeleted: true);
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+      return;
+    }
+    if (!context.mounted) return;
+
+    final relatedOrders =
+        allOrders.where((o) => o.routeIds.contains(id) && !o.isDeleted).toList();
 
     if (relatedOrders.isNotEmpty) {
       await showDialog(
@@ -234,16 +277,44 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
         ],
       ),
     );
-    if (confirmed == true) {
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    try {
       final repository = Provider.of<RouteRepository>(context, listen: false);
       await repository.hardDelete(id);
-      final notifier = Provider.of<RouteListNotifier>(context, listen: false);
-      await notifier.load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Маршрут удалён навсегда')),
-      );
-      context.go('/routes');
+    } on ForbiddenException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    } on ConflictException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
     }
+
+    if (!context.mounted) return;
+    final notifier = Provider.of<RouteListNotifier>(context, listen: false);
+    await notifier.load();
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Маршрут удалён навсегда')),
+    );
+    context.go('/routes');
   }
 
   Future<void> _restore(BuildContext context, int id) async {
@@ -264,15 +335,43 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
         ],
       ),
     );
-    if (confirmed == true) {
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    try {
       final repository = Provider.of<RouteRepository>(context, listen: false);
       await repository.restore(id);
-      final notifier = Provider.of<RouteListNotifier>(context, listen: false);
-      await notifier.load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Маршрут восстановлен')),
-      );
-      context.go('/routes');
+    } on ForbiddenException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    } on ConflictException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
     }
+
+    if (!context.mounted) return;
+    final notifier = Provider.of<RouteListNotifier>(context, listen: false);
+    await notifier.load();
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Маршрут восстановлен')),
+    );
+    context.go('/routes');
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import '../core/api_exceptions.dart';
 import '../repositories/client_repository.dart';
 import '../repositories/order_repository.dart';
 import '../state/client_list_notifier.dart';
@@ -123,21 +124,61 @@ class ClientDetailScreen extends StatelessWidget {
         ],
       ),
     );
-    if (confirmed == true) {
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    try {
       final repository = Provider.of<ClientRepository>(context, listen: false);
       await repository.softDelete(id);
-      final notifier = Provider.of<ClientListNotifier>(context, listen: false);
-      await notifier.load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Клиент скрыт')),
-      );
-      context.go('/clients');
+    } on ForbiddenException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    } on ConflictException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
     }
+
+    if (!context.mounted) return;
+    final notifier = Provider.of<ClientListNotifier>(context, listen: false);
+    await notifier.load();
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Клиент скрыт')),
+    );
+    context.go('/clients');
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
+    // Предварительная проверка связей — оставляем.
     final orderRepo = Provider.of<OrderRepository>(context, listen: false);
-    final orders = await orderRepo.findByClientId(id);
+    List<dynamic> orders;
+    try {
+      orders = await orderRepo.findByClientId(id);
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+      return;
+    }
+    if (!context.mounted) return;
 
     if (orders.isNotEmpty) {
       await showDialog(
@@ -145,10 +186,7 @@ class ClientDetailScreen extends StatelessWidget {
         builder: (context) => AlertDialog(
           title: const Text(
             'Невозможно удалить клиента',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -169,25 +207,14 @@ class ClientDetailScreen extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 'Количество заказов: ${orders.length}',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Сначала удалите или переназначьте заказы, затем попробуйте снова.',
-                style: TextStyle(fontSize: 14, color: Colors.grey),
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'OK',
-                style: TextStyle(fontSize: 14),
-              ),
+              child: const Text('OK', style: TextStyle(fontSize: 14)),
             ),
           ],
         ),
@@ -200,10 +227,7 @@ class ClientDetailScreen extends StatelessWidget {
       builder: (context) => AlertDialog(
         title: const Text(
           'Удалить клиента навсегда?',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         content: const Text(
           'Это действие нельзя отменить!\n\n'
@@ -213,32 +237,56 @@ class ClientDetailScreen extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text(
-              'Отмена',
-              style: TextStyle(fontSize: 14),
-            ),
+            child: const Text('Отмена', style: TextStyle(fontSize: 14)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Удалить навсегда',
-              style: TextStyle(fontSize: 14, color: Colors.red),
-            ),
+            child: const Text('Удалить навсегда', style: TextStyle(fontSize: 14, color: Colors.red)),
           ),
         ],
       ),
     );
+    if (confirmed != true) return;
+    if (!context.mounted) return;
 
-    if (confirmed == true) {
+    try {
       final repository = Provider.of<ClientRepository>(context, listen: false);
       await repository.hardDelete(id);
-      final notifier = Provider.of<ClientListNotifier>(context, listen: false);
-      await notifier.load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Клиент удалён навсегда')),
-      );
-      context.go('/clients');
+    } on ForbiddenException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    } on ConflictException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
     }
+
+    if (!context.mounted) return;
+    final notifier = Provider.of<ClientListNotifier>(context, listen: false);
+    await notifier.load();
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Клиент удалён навсегда'),
+        backgroundColor: Colors.green,
+      ),
+    );
+    context.go('/clients');
   }
 
   Future<void> _restore(BuildContext context, int id) async {
@@ -259,15 +307,43 @@ class ClientDetailScreen extends StatelessWidget {
         ],
       ),
     );
-    if (confirmed == true) {
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    try {
       final repository = Provider.of<ClientRepository>(context, listen: false);
       await repository.restore(id);
-      final notifier = Provider.of<ClientListNotifier>(context, listen: false);
-      await notifier.load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Клиент восстановлен')),
-      );
-      context.go('/clients');
+    } on ForbiddenException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    } on ConflictException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
     }
+
+    if (!context.mounted) return;
+    final notifier = Provider.of<ClientListNotifier>(context, listen: false);
+    await notifier.load();
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Клиент восстановлен')),
+    );
+    context.go('/clients');
   }
 }

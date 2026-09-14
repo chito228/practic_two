@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import '../core/api_exceptions.dart';
 import '../repositories/order_repository.dart';
 import '../state/order_list_notifier.dart';
 
@@ -35,7 +36,6 @@ class OrderDetailScreen extends StatelessWidget {
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () {
-                      // Перезапуск FutureBuilder: пересоздаём экран
                       context.go('/orders/$id');
                     },
                     child: const Text('Повторить'),
@@ -180,6 +180,9 @@ class OrderDetailScreen extends StatelessWidget {
     );
   }
 
+  // ─────────────────────────────────────────────────────
+  // Soft-delete
+  // ─────────────────────────────────────────────────────
   Future<void> _softDelete(BuildContext context, int id) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -201,10 +204,33 @@ class OrderDetailScreen extends StatelessWidget {
     if (confirmed != true) return;
     if (!context.mounted) return;
 
-    final repository = Provider.of<OrderRepository>(context, listen: false);
-    await repository.softDelete(id);
-    if (!context.mounted) return;
+    try {
+      final repository = Provider.of<OrderRepository>(context, listen: false);
+      await repository.softDelete(id);
+    } on ForbiddenException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    } on ConflictException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    }
 
+    if (!context.mounted) return;
     final notifier = Provider.of<OrderListNotifier>(context, listen: false);
     await notifier.load();
     if (!context.mounted) return;
@@ -215,9 +241,23 @@ class OrderDetailScreen extends StatelessWidget {
     context.go('/orders');
   }
 
+  // ─────────────────────────────────────────────────────
+  // Hard-delete
+  // ─────────────────────────────────────────────────────
   Future<void> _hardDelete(BuildContext context, int id) async {
     final orderRepo = Provider.of<OrderRepository>(context, listen: false);
-    final full = await orderRepo.findByIdWithRelations(id);
+
+    OrderFull? full;
+    try {
+      full = await orderRepo.findByIdWithRelations(id);
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+      return;
+    }
     if (full == null || !context.mounted) return;
 
     final related = <String>[];
@@ -306,10 +346,33 @@ class OrderDetailScreen extends StatelessWidget {
     if (confirmed != true) return;
     if (!context.mounted) return;
 
-    final repository = Provider.of<OrderRepository>(context, listen: false);
-    await repository.hardDelete(id);
-    if (!context.mounted) return;
+    try {
+      final repository = Provider.of<OrderRepository>(context, listen: false);
+      await repository.hardDelete(id);
+    } on ForbiddenException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    } on ConflictException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    }
 
+    if (!context.mounted) return;
     final notifier = Provider.of<OrderListNotifier>(context, listen: false);
     await notifier.load();
     if (!context.mounted) return;
@@ -320,6 +383,9 @@ class OrderDetailScreen extends StatelessWidget {
     context.go('/orders');
   }
 
+  // ─────────────────────────────────────────────────────
+  // Restore
+  // ─────────────────────────────────────────────────────
   Future<void> _restore(BuildContext context, int id) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -341,10 +407,33 @@ class OrderDetailScreen extends StatelessWidget {
     if (confirmed != true) return;
     if (!context.mounted) return;
 
-    final repository = Provider.of<OrderRepository>(context, listen: false);
-    await repository.restore(id);
-    if (!context.mounted) return;
+    try {
+      final repository = Provider.of<OrderRepository>(context, listen: false);
+      await repository.restore(id);
+    } on ForbiddenException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    } on ConflictException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    }
 
+    if (!context.mounted) return;
     final notifier = Provider.of<OrderListNotifier>(context, listen: false);
     await notifier.load();
     if (!context.mounted) return;

@@ -1,14 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
+import '../models/role.dart';
+import '../state/auth_notifier.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthNotifier>();
+    final user = auth.user;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Главная'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Главная'),
+            if (user != null)
+              Text(
+                '${user.fullName} — ${user.role.label}',
+                style: const TextStyle(fontSize: 12),
+              ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Выйти',
+            onPressed: () async {
+              await context.read<AuthNotifier>().logout();
+              if (context.mounted) context.go('/login');
+            },
+          ),
+        ],
       ),
       body: Center(
         child: ConstrainedBox(
@@ -18,40 +46,35 @@ class HomeScreen extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _buildMenuButton(
-                  context,
-                  'Клиенты',
-                  '/clients',
-                  Icons.business,
-                ),
+                _buildMenuButton(context, 'Клиенты', '/clients'),
                 const SizedBox(height: 12),
-                _buildMenuButton(
-                  context,
-                  'Заказы',
-                  '/orders',
-                  Icons.local_shipping,
-                ),
+                _buildMenuButton(context, 'Заказы', '/orders'),
                 const SizedBox(height: 12),
-                _buildMenuButton(
-                  context,
-                  'Грузы',
-                  '/cargo',
-                  Icons.inventory,
-                ),
+                _buildMenuButton(context, 'Грузы', '/cargo'),
                 const SizedBox(height: 12),
-                _buildMenuButton(
-                  context,
-                  'Маршруты',
-                  '/routes',
-                  Icons.route,
-                ),
+                _buildMenuButton(context, 'Маршруты', '/routes'),
                 const SizedBox(height: 12),
-                _buildMenuButton(
-                  context,
-                  'Транспорт',
-                  '/vehicles',
-                  Icons.directions_car,
-                ),
+                _buildMenuButton(context, 'Транспорт', '/vehicles'),
+
+                // ─── Статистика — только для manager ───
+                if (auth.hasExactly(Role.manager)) ...[
+                  const SizedBox(height: 12),
+                  _buildMenuButton(
+                    context,
+                    'Статистика',
+                    '/stats',
+                  ),
+                ],
+
+                // ─── Пользователи — только для admin ───
+                if (auth.hasExactly(Role.admin)) ...[
+                  const SizedBox(height: 12),
+                  _buildMenuButton(
+                    context,
+                    'Пользователи',
+                    '/users',
+                  ),
+                ],
               ],
             ),
           ),
@@ -64,19 +87,17 @@ class HomeScreen extends StatelessWidget {
     BuildContext context,
     String title,
     String route,
-    IconData icon,
   ) {
     return SizedBox(
       width: double.infinity,
-      child: FilledButton.icon(
+      child: FilledButton(
         onPressed: () => context.go(route),
-        icon: Icon(icon),
-        label: Text(
-          title,
-          style: const TextStyle(fontSize: 16),
-        ),
         style: FilledButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 16),
+        ),
+        child: Text(
+          title,
+          style: const TextStyle(fontSize: 16),
         ),
       ),
     );

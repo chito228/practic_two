@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import '../models/role.dart';
+import '../state/auth_notifier.dart';
 import '../state/client_list_notifier.dart';
 import '../models/client.dart';
 import '../widgets/entity_table.dart';
@@ -33,6 +35,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
   @override
   Widget build(BuildContext context) {
     final notifier = Provider.of<ClientListNotifier>(context);
+    final auth = context.watch<AuthNotifier>();
 
     return Scaffold(
       appBar: AppBar(
@@ -126,7 +129,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
               ),
             ),
           Expanded(
-            child: _buildContent(notifier),
+            child: _buildContent(notifier, auth),
           ),
           if (notifier.status == LoadStatus.success && notifier.result.total > 0)
             Padding(
@@ -150,14 +153,16 @@ class _ClientListScreenState extends State<ClientListScreen> {
             ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => context.go('/clients/create'),
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: auth.uiHas(Role.logist)
+          ? FloatingActionButton(
+              onPressed: () => context.go('/clients/create'),
+              child: const Icon(Icons.add),
+            )
+          : null,
     );
   }
 
-  Widget _buildContent(ClientListNotifier notifier) {
+  Widget _buildContent(ClientListNotifier notifier, AuthNotifier auth) {
     switch (notifier.status) {
       case LoadStatus.idle:
       case LoadStatus.loading:
@@ -225,32 +230,35 @@ class _ClientListScreenState extends State<ClientListScreen> {
                 ),
                 child: const Text('Показать', style: TextStyle(fontSize: 12)),
               ),
-              TextButton(
-                onPressed: () => context.go('/clients/${c.id}/edit'),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  minimumSize: Size.zero,
+              if (auth.uiHas(Role.logist))
+                TextButton(
+                  onPressed: () => context.go('/clients/${c.id}/edit'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    minimumSize: Size.zero,
+                  ),
+                  child: const Text('Ред.', style: TextStyle(fontSize: 12)),
                 ),
-                child: const Text('Ред.', style: TextStyle(fontSize: 12)),
-              ),
-              TextButton(
-                onPressed: () => _softDelete(context, c.id),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  minimumSize: Size.zero,
-                  foregroundColor: Colors.orange,
+              if (auth.uiHas(Role.logist))
+                TextButton(
+                  onPressed: () => _softDelete(context, c.id),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    minimumSize: Size.zero,
+                    foregroundColor: Colors.orange,
+                  ),
+                  child: const Text('Скрыть', style: TextStyle(fontSize: 12)),
                 ),
-                child: const Text('Скрыть', style: TextStyle(fontSize: 12)),
-              ),
-              TextButton(
-                onPressed: () => _hardDelete(context, c.id),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  minimumSize: Size.zero,
-                  foregroundColor: Colors.red,
+              if (auth.uiHas(Role.admin))
+                TextButton(
+                  onPressed: () => _hardDelete(context, c.id),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    minimumSize: Size.zero,
+                    foregroundColor: Colors.red,
+                  ),
+                  child: const Text('Удалить', style: TextStyle(fontSize: 12)),
                 ),
-                child: const Text('Удалить', style: TextStyle(fontSize: 12)),
-              ),
             ],
           ),
         );

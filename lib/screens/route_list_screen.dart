@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import '../models/role.dart';
+import '../state/auth_notifier.dart';
 import '../state/route_list_notifier.dart';
 import '../models/route.dart' as model;
 import '../widgets/entity_table.dart';
@@ -32,6 +34,7 @@ class _RouteListScreenState extends State<RouteListScreen> {
   @override
   Widget build(BuildContext context) {
     final notifier = Provider.of<RouteListNotifier>(context);
+    final auth = context.watch<AuthNotifier>();
 
     return Scaffold(
       appBar: AppBar(
@@ -73,18 +76,20 @@ class _RouteListScreenState extends State<RouteListScreen> {
             ),
           ),
           Expanded(
-            child: _buildContent(notifier),
+            child: _buildContent(notifier, auth),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => context.go('/routes/create'),
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: auth.uiHas(Role.logist)
+          ? FloatingActionButton(
+              onPressed: () => context.go('/routes/create'),
+              child: const Icon(Icons.add),
+            )
+          : null,
     );
   }
 
-  Widget _buildContent(RouteListNotifier notifier) {
+  Widget _buildContent(RouteListNotifier notifier, AuthNotifier auth) {
     switch (notifier.status) {
       case LoadStatus.idle:
       case LoadStatus.loading:
@@ -160,32 +165,35 @@ class _RouteListScreenState extends State<RouteListScreen> {
                 ),
                 child: const Text('Показать', style: TextStyle(fontSize: 12)),
               ),
-              TextButton(
-                onPressed: () => context.go('/routes/${r.id}/edit'),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  minimumSize: Size.zero,
+              if (auth.uiHas(Role.logist))
+                TextButton(
+                  onPressed: () => context.go('/routes/${r.id}/edit'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    minimumSize: Size.zero,
+                  ),
+                  child: const Text('Ред.', style: TextStyle(fontSize: 12)),
                 ),
-                child: const Text('Ред.', style: TextStyle(fontSize: 12)),
-              ),
-              TextButton(
-                onPressed: () => _softDelete(context, r.id),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  minimumSize: Size.zero,
-                  foregroundColor: Colors.orange,
+              if (auth.uiHas(Role.logist))
+                TextButton(
+                  onPressed: () => _softDelete(context, r.id),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    minimumSize: Size.zero,
+                    foregroundColor: Colors.orange,
+                  ),
+                  child: const Text('Скрыть', style: TextStyle(fontSize: 12)),
                 ),
-                child: const Text('Скрыть', style: TextStyle(fontSize: 12)),
-              ),
-              TextButton(
-                onPressed: () => _hardDelete(context, r.id),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  minimumSize: Size.zero,
-                  foregroundColor: Colors.red,
+              if (auth.uiHas(Role.admin))
+                TextButton(
+                  onPressed: () => _hardDelete(context, r.id),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    minimumSize: Size.zero,
+                    foregroundColor: Colors.red,
+                  ),
+                  child: const Text('Удалить', style: TextStyle(fontSize: 12)),
                 ),
-                child: const Text('Удалить', style: TextStyle(fontSize: 12)),
-              ),
             ],
           ),
         );
