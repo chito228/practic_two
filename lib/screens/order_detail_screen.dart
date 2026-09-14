@@ -1,15 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import '../repositories/persistent_order_repository.dart';
-import '../repositories/persistent_client_repository.dart';
-import '../repositories/persistent_cargo_repository.dart';
-import '../repositories/persistent_route_repository.dart';
+import '../repositories/order_repository.dart';
 import '../state/order_list_notifier.dart';
-import '../models/order.dart';
-import '../models/client.dart';
-import '../models/cargo.dart';
-import '../models/route.dart' as model;
 
 class OrderDetailScreen extends StatelessWidget {
   final int id;
@@ -17,122 +10,139 @@ class OrderDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final repository = Provider.of<PersistentOrderRepository>(context);
-    return FutureBuilder(
-      future: repository.findById(id),
+    final repository = Provider.of<OrderRepository>(context);
+
+    return FutureBuilder<OrderFull?>(
+      future: repository.findByIdWithRelations(id),
       builder: (context, snapshot) {
+        // Состояние загрузки
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Scaffold(
             appBar: AppBar(title: const Text('Заказ')),
             body: const Center(child: CircularProgressIndicator()),
           );
         }
-        if (snapshot.hasError || snapshot.data == null) {
+
+        // Ошибка загрузки
+        if (snapshot.hasError) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Заказ')),
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Ошибка загрузки: ${snapshot.error}'),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      // Перезапуск FutureBuilder: пересоздаём экран
+                      context.go('/orders/$id');
+                    },
+                    child: const Text('Повторить'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        // Не найдено
+        if (snapshot.data == null) {
           return Scaffold(
             appBar: AppBar(title: const Text('Заказ')),
             body: const Center(child: Text('Заказ не найден')),
           );
         }
-        final order = snapshot.data!;
 
-        return FutureBuilder(
-          future: Future.wait([
-            context.read<PersistentClientRepository>().findById(order.clientId),
-            Future.wait(order.cargoIds.map((id) =>
-              context.read<PersistentCargoRepository>().findById(id))),
-            Future.wait(order.routeIds.map((id) =>
-              context.read<PersistentRouteRepository>().findById(id))),
-          ]),
-          builder: (context, relatedSnapshot) {
-            if (relatedSnapshot.connectionState == ConnectionState.waiting) {
-              return Scaffold(
-                appBar: AppBar(title: Text('Заказ #${order.orderNumber}')),
-                body: const Center(child: CircularProgressIndicator()),
-              );
-            }
+        final full = snapshot.data!;
+        final order = full.order;
+        final client = full.client;
+        final cargoList = full.cargo;
+        final routeList = full.routes;
 
-            final client = relatedSnapshot.data?[0] as Client?;
-            final cargoList = (relatedSnapshot.data?[1] as List?)?.whereType<Cargo>().toList() ?? [];
-            final routeList = (relatedSnapshot.data?[2] as List?)?.whereType<model.Route>().toList() ?? [];
+        return Scaffold(
+          appBar: AppBar(title: Text('Заказ #${order.orderNumber}')),
+          body: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _infoRow('ID', order.id.toString()),
+                _infoRow('Номер заказа', order.orderNumber),
+                _infoRow(
+                  'Клиент',
+                  client?.companyName ?? 'ID: ${order.clientId}',
+                ),
+                _infoRow('Описание груза', order.cargoDescription),
+                _infoRow('Вес', '${order.weight} кг'),
+                _infoRow('Объём', '${order.volume} м³'),
+                _infoRow(
+                  'Дата отправки',
+                  order.shippingDate.toLocal().toString().split(' ')[0],
+                ),
+                if (order.deliveryDate != null)
+                  _infoRow(
+                    'Дата доставки',
+                    order.deliveryDate!.toLocal().toString().split(' ')[0],
+                  ),
+                _infoRow('Статус', _getStatusText(order.status)),
 
-            return Scaffold(
-              appBar: AppBar(title: Text('Заказ #${order.orderNumber}')),
-              body: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const Divider(height: 32),
+                const Text(
+                  'Грузы',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                if (cargoList.isNotEmpty)
+                  ...cargoList.map((c) => _infoRow('•', c.name))
+                else
+                  const Text('Нет грузов', style: TextStyle(color: Colors.grey)),
+
+                const Divider(height: 32),
+                const Text(
+                  'Маршруты',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                if (routeList.isNotEmpty)
+                  ...routeList.map((r) => _infoRow('•', r.name))
+                else
+                  const Text('Нет маршрутов', style: TextStyle(color: Colors.grey)),
+
+                if (order.isDeleted)
+                  _infoRow('Статус', 'Скрыт', color: Colors.orange),
+                const Spacer(),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _infoRow('ID', order.id.toString()),
-                    _infoRow('Номер заказа', order.orderNumber),
-                    _infoRow('Клиент', client?.companyName ?? 'ID: ${order.clientId}'),
-                    _infoRow('Описание груза', order.cargoDescription),
-                    _infoRow('Вес', '${order.weight} кг'),
-                    _infoRow('Объём', '${order.volume} м³'),
-                    _infoRow('Дата отправки',
-                      order.shippingDate.toLocal().toString().split(' ')[0]),
-                    if (order.deliveryDate != null)
-                      _infoRow('Дата доставки',
-                        order.deliveryDate!.toLocal().toString().split(' ')[0]),
-                    _infoRow('Статус', _getStatusText(order.status)),
-
-                    const Divider(height: 32),
-                    const Text(
-                      'Грузы',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ElevatedButton(
+                      onPressed: () => context.go('/orders'),
+                      child: const Text('Назад'),
                     ),
-                    const SizedBox(height: 8),
-                    if (cargoList.isNotEmpty)
-                      ...cargoList.map((c) => _infoRow('•', c.name))
-                    else
-                      const Text('Нет грузов', style: TextStyle(color: Colors.grey)),
-
-                    const Divider(height: 32),
-                    const Text(
-                      'Маршруты',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ElevatedButton(
+                      onPressed: () => context.go('/orders/${order.id}/edit'),
+                      child: const Text('Редактировать'),
                     ),
-                    const SizedBox(height: 8),
-                    if (routeList.isNotEmpty)
-                      ...routeList.map((r) => _infoRow('•', r.name))
-                    else
-                      const Text('Нет маршрутов', style: TextStyle(color: Colors.grey)),
-
-                    if (order.isDeleted)
-                      _infoRow('Статус', 'Скрыт', color: Colors.orange),
-                    const Spacer(),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        ElevatedButton(
-                          onPressed: () => context.go('/orders'),
-                          child: const Text('Назад'),
-                        ),
-                        ElevatedButton(
-                          onPressed: () => context.go('/orders/${order.id}/edit'),
-                          child: const Text('Редактировать'),
-                        ),
-                        if (!order.isDeleted) ...[
-                          ElevatedButton(
-                            onPressed: () => _softDelete(context, order.id),
-                            child: const Text('Скрыть'),
-                          ),
-                          ElevatedButton(
-                            onPressed: () => _hardDelete(context, order.id),
-                            child: const Text('Удалить'),
-                          ),
-                        ] else ...[
-                          ElevatedButton(
-                            onPressed: () => _restore(context, order.id),
-                            child: const Text('Восстановить'),
-                          ),
-                        ],
-                      ],
-                    ),
+                    if (!order.isDeleted) ...[
+                      ElevatedButton(
+                        onPressed: () => _softDelete(context, order.id),
+                        child: const Text('Скрыть'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () => _hardDelete(context, order.id),
+                        child: const Text('Удалить'),
+                      ),
+                    ] else ...[
+                      ElevatedButton(
+                        onPressed: () => _restore(context, order.id),
+                        child: const Text('Восстановить'),
+                      ),
+                    ],
                   ],
                 ),
-              ),
-            );
-          },
+              ],
+            ),
+          ),
         );
       },
     );
@@ -140,10 +150,14 @@ class OrderDetailScreen extends StatelessWidget {
 
   String _getStatusText(String status) {
     switch (status) {
-      case 'in_transit': return 'В пути';
-      case 'delivered': return 'Доставлено';
-      case 'cancelled': return 'Отменено';
-      default: return status;
+      case 'in_transit':
+        return 'В пути';
+      case 'delivered':
+        return 'Доставлено';
+      case 'cancelled':
+        return 'Отменено';
+      default:
+        return status;
     }
   }
 
@@ -155,7 +169,10 @@ class OrderDetailScreen extends StatelessWidget {
         children: [
           SizedBox(
             width: label.length > 2 ? 120 : 20,
-            child: Text('$label:', style: const TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(
+              '$label:',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
           Expanded(child: Text(value, style: TextStyle(color: color))),
         ],
@@ -181,52 +198,40 @@ class OrderDetailScreen extends StatelessWidget {
         ],
       ),
     );
-    if (confirmed == true) {
-      final repository = Provider.of<PersistentOrderRepository>(context, listen: false);
-      await repository.softDelete(id);
-      final notifier = Provider.of<OrderListNotifier>(context, listen: false);
-      await notifier.load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Заказ скрыт')),
-      );
-      context.go('/orders');
-    }
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    final repository = Provider.of<OrderRepository>(context, listen: false);
+    await repository.softDelete(id);
+    if (!context.mounted) return;
+
+    final notifier = Provider.of<OrderListNotifier>(context, listen: false);
+    await notifier.load();
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Заказ скрыт')),
+    );
+    context.go('/orders');
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
-    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
-    final order = await orderRepo.findById(id);
-    if (order == null) return;
+    final orderRepo = Provider.of<OrderRepository>(context, listen: false);
+    final full = await orderRepo.findByIdWithRelations(id);
+    if (full == null || !context.mounted) return;
 
     final related = <String>[];
 
-    if (order.clientId > 0) {
-      final clientRepo = Provider.of<PersistentClientRepository>(context, listen: false);
-      final client = await clientRepo.findById(order.clientId);
-      if (client != null) {
-        related.add('• Клиент: ${client.companyName}');
-      }
+    if (full.client != null) {
+      related.add('• Клиент: ${full.client!.companyName}');
     }
-
-    if (order.cargoIds.isNotEmpty) {
-      final cargoRepo = Provider.of<PersistentCargoRepository>(context, listen: false);
-      for (final cargoId in order.cargoIds) {
-        final cargo = await cargoRepo.findById(cargoId);
-        if (cargo != null) {
-          related.add('• Груз: ${cargo.name}');
-        }
-      }
+    for (final c in full.cargo) {
+      related.add('• Груз: ${c.name}');
     }
-
-    if (order.routeIds.isNotEmpty) {
-      final routeRepo = Provider.of<PersistentRouteRepository>(context, listen: false);
-      for (final routeId in order.routeIds) {
-        final route = await routeRepo.findById(routeId);
-        if (route != null) {
-          related.add('• Маршрут: ${route.name}');
-        }
-      }
+    for (final r in full.routes) {
+      related.add('• Маршрут: ${r.name}');
     }
+    if (!context.mounted) return;
 
     if (related.isNotEmpty) {
       await showDialog(
@@ -246,9 +251,9 @@ class OrderDetailScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               ...related.map((item) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2.0),
-                child: Text(item, style: const TextStyle(fontSize: 14)),
-              )),
+                    padding: const EdgeInsets.symmetric(vertical: 2.0),
+                    child: Text(item, style: const TextStyle(fontSize: 14)),
+                  )),
               const SizedBox(height: 12),
               Text(
                 'Количество связанных записей: ${related.length}',
@@ -290,21 +295,29 @@ class OrderDetailScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить навсегда', style: TextStyle(fontSize: 14, color: Colors.red)),
+            child: const Text(
+              'Удалить навсегда',
+              style: TextStyle(fontSize: 14, color: Colors.red),
+            ),
           ),
         ],
       ),
     );
-    if (confirmed == true) {
-      final repository = Provider.of<PersistentOrderRepository>(context, listen: false);
-      await repository.hardDelete(id);
-      final notifier = Provider.of<OrderListNotifier>(context, listen: false);
-      await notifier.load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Заказ удалён навсегда')),
-      );
-      context.go('/orders');
-    }
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    final repository = Provider.of<OrderRepository>(context, listen: false);
+    await repository.hardDelete(id);
+    if (!context.mounted) return;
+
+    final notifier = Provider.of<OrderListNotifier>(context, listen: false);
+    await notifier.load();
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Заказ удалён навсегда')),
+    );
+    context.go('/orders');
   }
 
   Future<void> _restore(BuildContext context, int id) async {
@@ -325,15 +338,20 @@ class OrderDetailScreen extends StatelessWidget {
         ],
       ),
     );
-    if (confirmed == true) {
-      final repository = Provider.of<PersistentOrderRepository>(context, listen: false);
-      await repository.restore(id);
-      final notifier = Provider.of<OrderListNotifier>(context, listen: false);
-      await notifier.load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Заказ восстановлен')),
-      );
-      context.go('/orders');
-    }
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    final repository = Provider.of<OrderRepository>(context, listen: false);
+    await repository.restore(id);
+    if (!context.mounted) return;
+
+    final notifier = Provider.of<OrderListNotifier>(context, listen: false);
+    await notifier.load();
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Заказ восстановлен')),
+    );
+    context.go('/orders');
   }
 }

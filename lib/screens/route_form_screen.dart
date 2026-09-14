@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import '../core/reference_cache.dart';
 import '../models/route.dart' as model;
 import '../models/vehicle.dart';
-import '../repositories/persistent_route_repository.dart';
-import '../repositories/persistent_vehicle_repository.dart';
+import '../repositories/route_repository.dart';
+import '../repositories/vehicle_repository.dart';
 import '../widgets/generic_form.dart';
 import '../state/route_list_notifier.dart';
 
@@ -30,11 +31,18 @@ class _RouteFormScreenState extends State<RouteFormScreen> {
   }
 
   Future<void> _loadData() async {
-    final vehicleRepo = context.read<PersistentVehicleRepository>();
-    _vehicles = await vehicleRepo.findAllWithDeleted();
+    final cache = context.read<ReferenceCache>();
+
+    // Справочник vehicles кэшируется.
+    _vehicles = await cache.load('vehicles', () {
+      final repo = context.read<VehicleRepository>();
+      return repo.findAll();
+    });
+
+    if (!mounted) return;
 
     if (widget.isEditing) {
-      final routeRepo = context.read<PersistentRouteRepository>();
+      final routeRepo = context.read<RouteRepository>();
       final r = await routeRepo.findById(widget.id!);
       if (r != null) _route = r;
     } else {
@@ -54,7 +62,8 @@ class _RouteFormScreenState extends State<RouteFormScreen> {
   }
 
   Future<void> _save(Map<String, dynamic> values) async {
-    final repo = context.read<PersistentRouteRepository>();
+    final repo = context.read<RouteRepository>();
+    final cache = context.read<ReferenceCache>();
 
     final route = model.Route(
       id: _route?.id ?? 0,
@@ -74,6 +83,10 @@ class _RouteFormScreenState extends State<RouteFormScreen> {
       await repo.create(route);
     }
 
+    // Сбрасываем кэш справочника маршрутов.
+    cache.invalidate('routes');
+
+    if (!mounted) return;
     final notifier = context.read<RouteListNotifier>();
     await notifier.load();
 

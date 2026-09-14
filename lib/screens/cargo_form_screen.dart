@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import '../core/reference_cache.dart';
 import '../models/cargo.dart';
-import '../repositories/persistent_cargo_repository.dart';
+import '../repositories/cargo_repository.dart';
 import '../widgets/generic_form.dart';
 import '../state/cargo_list_notifier.dart';
 
@@ -28,8 +29,9 @@ class _CargoFormScreenState extends State<CargoFormScreen> {
 
   Future<void> _loadData() async {
     if (widget.isEditing) {
-      final repo = context.read<PersistentCargoRepository>();
+      final repo = context.read<CargoRepository>();
       final c = await repo.findById(widget.id!);
+      if (!mounted) return;
       if (c != null) _cargo = c;
     } else {
       _cargo = Cargo(
@@ -45,7 +47,8 @@ class _CargoFormScreenState extends State<CargoFormScreen> {
   }
 
   Future<void> _save(Map<String, dynamic> values) async {
-    final repo = context.read<PersistentCargoRepository>();
+    final repo = context.read<CargoRepository>();
+    final cache = context.read<ReferenceCache>();
     final desc = (values['description'] as String?)?.trim() ?? '';
 
     final cargo = Cargo(
@@ -63,6 +66,10 @@ class _CargoFormScreenState extends State<CargoFormScreen> {
       await repo.create(cargo);
     }
 
+    // Сбрасываем кэш справочника грузов.
+    cache.invalidate('cargo');
+
+    if (!mounted) return;
     final notifier = context.read<CargoListNotifier>();
     await notifier.load();
 

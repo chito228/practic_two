@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 abstract class BaseRepository<T> {
@@ -19,6 +20,11 @@ abstract class BaseRepository<T> {
   List<T> seedData();
   T createCopyWithNewId(T item, int newId);
 
+  /// Переопределяется в подклассах. Публичный — чтобы override
+  /// работал из другого файла (методы с `_` приватны в пределах файла).
+  T softDeleteItem(T item);
+  T restoreItem(T item);
+
   void _restore() {
     final raw = prefs.getString(key);
     if (raw == null) {
@@ -31,7 +37,7 @@ abstract class BaseRepository<T> {
       final list = jsonDecode(raw) as List;
       _items = list.map((e) => fromJson(e as Map<String, dynamic>)).toList();
     } catch (e) {
-      print('Ошибка восстановления данных: $e');
+      debugPrint('Ошибка восстановления данных: $e');
       _items = seedData();
       _persist();
       dataWasReset = true;
@@ -43,7 +49,7 @@ abstract class BaseRepository<T> {
       final jsonData = jsonEncode(_items.map((e) => toJson(e)).toList());
       await prefs.setString(key, jsonData);
     } catch (e) {
-      print('Ошибка сохранения: $e');
+      debugPrint('Ошибка сохранения: $e');
     }
   }
 
@@ -56,7 +62,8 @@ abstract class BaseRepository<T> {
         if (id is int && id > maxId) {
           maxId = id;
         }
-      } catch (e) {
+      } catch (_) {
+        // ignore: empty_catches
       }
     }
     return maxId + 1;
@@ -104,7 +111,7 @@ abstract class BaseRepository<T> {
     await Future.delayed(const Duration(milliseconds: 50));
     final index = _items.indexWhere((e) => (e as dynamic).id == id);
     if (index == -1) throw StateError('Объект с id $id не найден');
-    _items[index] = _softDeleteItem(_items[index]);
+    _items[index] = softDeleteItem(_items[index]);
     await _persist();
   }
 
@@ -118,7 +125,7 @@ abstract class BaseRepository<T> {
     await Future.delayed(const Duration(milliseconds: 50));
     final index = _items.indexWhere((e) => (e as dynamic).id == id);
     if (index == -1) throw StateError('Объект с id $id не найден');
-    _items[index] = _restoreItem(_items[index]);
+    _items[index] = restoreItem(_items[index]);
     await _persist();
   }
 
@@ -126,16 +133,15 @@ abstract class BaseRepository<T> {
     await Future.delayed(const Duration(milliseconds: 50));
     var count = 0;
     for (final id in ids) {
-      final i = _items.indexWhere((e) => (e as dynamic).id == id && !(e as dynamic).isDeleted);
+      final i = _items.indexWhere(
+        (e) => (e as dynamic).id == id && !(e as dynamic).isDeleted,
+      );
       if (i != -1) {
-        _items[i] = _softDeleteItem(_items[i]);
+        _items[i] = softDeleteItem(_items[i]);
         count++;
       }
     }
     await _persist();
     return count;
   }
-
-  T _softDeleteItem(T item);
-  T _restoreItem(T item);
 }

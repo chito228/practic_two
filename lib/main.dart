@@ -1,13 +1,30 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:dio/dio.dart';
+
+import 'core/api_client.dart';
+import 'core/auth_session.dart';
+import 'core/reference_cache.dart';
 import 'router.dart';
-import 'repositories/persistent_client_repository.dart';
-import 'repositories/persistent_order_repository.dart';
-import 'repositories/persistent_cargo_repository.dart';
-import 'repositories/persistent_route_repository.dart';
-import 'repositories/persistent_vehicle_repository.dart';
+
+// Интерфейсы репозиториев
+import 'repositories/client_repository.dart';
+import 'repositories/cargo_repository.dart';
+import 'repositories/order_repository.dart';
+import 'repositories/route_repository.dart';
+import 'repositories/vehicle_repository.dart';
+
+// Api-реализации (ПР4)
+import 'repositories/api/api_client_repository.dart';
+import 'repositories/api/api_cargo_repository.dart';
+import 'repositories/api/api_order_repository.dart';
+import 'repositories/api/api_route_repository.dart';
+import 'repositories/api/api_vehicle_repository.dart';
+
+// Нотифаеры
 import 'state/client_list_notifier.dart';
 import 'state/order_list_notifier.dart';
 import 'state/cargo_list_notifier.dart';
@@ -17,49 +34,75 @@ import 'state/vehicle_list_notifier.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   usePathUrlStrategy();
-  final prefs = await SharedPreferences.getInstance();
+
+  final authSession = AuthSession();
+  final dio = buildDio(authSession);
+
+  // Пытаемся войти. Если сервер недоступен — не падаем,
+  // а запускаем приложение: нотифаеры покажут ErrorView.
+  try {
+    await authSession.loginWith(
+      dio,
+      username: 'librarian',
+      password: 'librarian123',
+    );
+  } catch (e) {
+    debugPrint('Не удалось выполнить вход: $e');
+  }
+
+  await SharedPreferences.getInstance();
 
   runApp(
     MultiProvider(
       providers: [
-        Provider<PersistentClientRepository>(
-          create: (_) => PersistentClientRepository(prefs, 'clients_v1'),
+        // ── Dio и сессия ─────────────────────────────────
+        Provider<Dio>.value(value: dio),
+        Provider<AuthSession>.value(value: authSession),
+
+        // ── Кэш справочников ─────────────────────────────
+        Provider<ReferenceCache>(create: (_) => ReferenceCache()),
+
+        // ── Api-репозитории ──────────────────────────────
+        Provider<ClientRepository>(
+          create: (context) => ApiClientRepository(context.read<Dio>()),
         ),
-        Provider<PersistentOrderRepository>(
-          create: (_) => PersistentOrderRepository(prefs, 'orders_v1'),
+        Provider<CargoRepository>(
+          create: (context) => ApiCargoRepository(context.read<Dio>()),
         ),
-        Provider<PersistentCargoRepository>(
-          create: (_) => PersistentCargoRepository(prefs, 'cargo_v1'),
+        Provider<RouteRepository>(
+          create: (context) => ApiRouteRepository(context.read<Dio>()),
         ),
-        Provider<PersistentRouteRepository>(
-          create: (_) => PersistentRouteRepository(prefs, 'routes_v1'),
+        Provider<VehicleRepository>(
+          create: (context) => ApiVehicleRepository(context.read<Dio>()),
         ),
-        Provider<PersistentVehicleRepository>(
-          create: (_) => PersistentVehicleRepository(prefs, 'vehicles_v1'),
+        Provider<OrderRepository>(
+          create: (context) => ApiOrderRepository(context.read<Dio>()),
         ),
+
+        // ── Нотифаеры ────────────────────────────────────
         ChangeNotifierProvider(
           create: (context) => ClientListNotifier(
-            context.read<PersistentClientRepository>(),
+            context.read<ClientRepository>(),
           )..load(),
         ),
         ChangeNotifierProvider(
           create: (context) => OrderListNotifier(
-            context.read<PersistentOrderRepository>(),
+            context.read<OrderRepository>(),
           )..load(),
         ),
         ChangeNotifierProvider(
           create: (context) => CargoListNotifier(
-            context.read<PersistentCargoRepository>(),
+            context.read<CargoRepository>(),
           )..load(),
         ),
         ChangeNotifierProvider(
           create: (context) => RouteListNotifier(
-            context.read<PersistentRouteRepository>(),
+            context.read<RouteRepository>(),
           )..load(),
         ),
         ChangeNotifierProvider(
           create: (context) => VehicleListNotifier(
-            context.read<PersistentVehicleRepository>(),
+            context.read<VehicleRepository>(),
           )..load(),
         ),
       ],
@@ -76,48 +119,6 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkDataReset();
-    });
-  }
-
-  void _checkDataReset() {
-    final clientRepo = context.read<PersistentClientRepository>();
-    final orderRepo = context.read<PersistentOrderRepository>();
-    final cargoRepo = context.read<PersistentCargoRepository>();
-    final routeRepo = context.read<PersistentRouteRepository>();
-    final vehicleRepo = context.read<PersistentVehicleRepository>();
-
-    final anyReset = clientRepo.dataWasReset ||
-        orderRepo.dataWasReset ||
-        cargoRepo.dataWasReset ||
-        routeRepo.dataWasReset ||
-        vehicleRepo.dataWasReset;
-
-    if (anyReset) {
-      _showDataResetDialog();
-    }
-  }
-
-  void _showDataResetDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Формат данных изменён'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('ОК'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(

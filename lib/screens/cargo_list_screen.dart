@@ -5,10 +5,12 @@ import '../state/cargo_list_notifier.dart';
 import '../models/cargo.dart';
 import '../widgets/entity_table.dart';
 import '../widgets/responsive_list.dart';
+import '../widgets/error_view.dart';
+import '../widgets/empty_view.dart';
 import '../utils/debounce.dart';
 import '../state/load_status.dart';
-import '../repositories/persistent_cargo_repository.dart';
-import '../repositories/persistent_order_repository.dart';
+import '../repositories/cargo_repository.dart';
+import '../repositories/order_repository.dart';
 
 class CargoListScreen extends StatefulWidget {
   const CargoListScreen({super.key});
@@ -65,10 +67,6 @@ class _CargoListScreenState extends State<CargoListScreen> {
               onChanged: (value) {
                 _searchQuery = value;
                 _debouncer.call(() {
-                  final repo = context.read<PersistentCargoRepository>();
-                  final items = repo.items.where((c) =>
-                      c.name.toLowerCase().contains(value.toLowerCase()) ||
-                      (c.description?.toLowerCase().contains(value.toLowerCase()) ?? false));
                   setState(() {});
                 });
               },
@@ -87,21 +85,28 @@ class _CargoListScreenState extends State<CargoListScreen> {
   }
 
   Widget _buildContent(CargoListNotifier notifier) {
-    final filteredItems = _searchQuery.isEmpty
-        ? notifier.items
-        : notifier.items.where((c) =>
-            c.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-            (c.description?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false))
-            .toList();
-
     switch (notifier.status) {
+      case LoadStatus.idle:
       case LoadStatus.loading:
         return const Center(child: CircularProgressIndicator());
+
       case LoadStatus.error:
-        return Center(child: Text('Ошибка: ${notifier.error}'));
+        return ErrorView(
+          message: notifier.error,
+          onRetry: () => notifier.load(),
+        );
+
       case LoadStatus.success:
+        final filteredItems = _searchQuery.isEmpty
+            ? notifier.items
+            : notifier.items
+                .where((c) =>
+                    c.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                    (c.description?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false))
+                .toList();
+
         if (filteredItems.isEmpty) {
-          return const Center(child: Text('Нет грузов'));
+          return const EmptyView(message: 'Нет грузов');
         }
         return ResponsiveList<Cargo>(
           items: filteredItems,
@@ -177,8 +182,6 @@ class _CargoListScreenState extends State<CargoListScreen> {
             ],
           ),
         );
-      default:
-        return const SizedBox.shrink();
     }
   }
 
@@ -201,17 +204,19 @@ class _CargoListScreenState extends State<CargoListScreen> {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<PersistentCargoRepository>(context, listen: false);
+      final repository = Provider.of<CargoRepository>(context, listen: false);
       await repository.softDelete(id);
+      if (!context.mounted) return;
       final notifier = Provider.of<CargoListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
-    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
-    final allOrders = await orderRepo.findAllWithDeleted();
+    final orderRepo = Provider.of<OrderRepository>(context, listen: false);
+    final allOrders = await orderRepo.findAll(includeDeleted: true);
     final relatedOrders = allOrders.where((o) => o.cargoIds.contains(id) && !o.isDeleted).toList();
+    if (!context.mounted) return;
 
     if (relatedOrders.isNotEmpty) {
       await showDialog(
@@ -284,16 +289,17 @@ class _CargoListScreenState extends State<CargoListScreen> {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<PersistentCargoRepository>(context, listen: false);
+      final repository = Provider.of<CargoRepository>(context, listen: false);
       await repository.hardDelete(id);
+      if (!context.mounted) return;
       final notifier = Provider.of<CargoListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
 
   Future<void> _confirmDelete(BuildContext context, CargoListNotifier notifier) async {
-    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
-    final allOrders = await orderRepo.findAllWithDeleted();
+    final orderRepo = Provider.of<OrderRepository>(context, listen: false);
+    final allOrders = await orderRepo.findAll(includeDeleted: true);
     final cargosWithOrders = <int>[];
 
     for (final id in notifier.selected) {
@@ -302,6 +308,7 @@ class _CargoListScreenState extends State<CargoListScreen> {
         cargosWithOrders.add(id);
       }
     }
+    if (!context.mounted) return;
 
     if (cargosWithOrders.isNotEmpty) {
       await showDialog(

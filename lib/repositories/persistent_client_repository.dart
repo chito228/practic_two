@@ -1,10 +1,12 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:dio/dio.dart';
 import '../models/client.dart';
 import 'base_repository.dart';
+import 'client_repository.dart';
 import '../state/client_query.dart';
 import '../state/page_result.dart';
 
-class PersistentClientRepository extends BaseRepository<Client> {
+class PersistentClientRepository extends BaseRepository<Client>
+    implements ClientRepository {
   PersistentClientRepository(super.prefs, super.key);
 
   @override
@@ -74,16 +76,27 @@ class PersistentClientRepository extends BaseRepository<Client> {
   }
 
   @override
-  Client _softDeleteItem(Client item) {
+  Client softDeleteItem(Client item) {
     return item.copyWith(deletedAt: DateTime.now());
   }
 
   @override
-  Client _restoreItem(Client item) {
+  Client restoreItem(Client item) {
     return item.copyWith(clearDeletedAt: true);
   }
 
-  Future<PageResult<Client>> find(ClientQuery query) async {
+  @override
+  Future<List<Client>> findAll({bool includeDeleted = false}) async {
+    await Future.delayed(const Duration(milliseconds: 50));
+    if (includeDeleted) return List.from(items);
+    return items.where((c) => !c.isDeleted).toList();
+  }
+
+  @override
+  Future<PageResult<Client>> find(
+    ClientQuery query, {
+    CancelToken? cancelToken,
+  }) async {
     await Future.delayed(const Duration(milliseconds: 250));
 
     var rows = items
@@ -92,10 +105,12 @@ class PersistentClientRepository extends BaseRepository<Client> {
 
     if (query.search.trim().isNotEmpty) {
       final needle = query.search.trim().toLowerCase();
-      rows = rows.where((c) =>
-          c.companyName.toLowerCase().contains(needle) ||
-          c.contactPerson.toLowerCase().contains(needle) ||
-          c.email.toLowerCase().contains(needle)).toList();
+      rows = rows
+          .where((c) =>
+              c.companyName.toLowerCase().contains(needle) ||
+              c.contactPerson.toLowerCase().contains(needle) ||
+              c.email.toLowerCase().contains(needle))
+          .toList();
     }
 
     rows.sort((a, b) {

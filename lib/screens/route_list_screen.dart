@@ -5,10 +5,12 @@ import '../state/route_list_notifier.dart';
 import '../models/route.dart' as model;
 import '../widgets/entity_table.dart';
 import '../widgets/responsive_list.dart';
+import '../widgets/error_view.dart';
+import '../widgets/empty_view.dart';
 import '../utils/debounce.dart';
 import '../state/load_status.dart';
-import '../repositories/persistent_route_repository.dart';
-import '../repositories/persistent_order_repository.dart';
+import '../repositories/route_repository.dart';
+import '../repositories/order_repository.dart';
 
 class RouteListScreen extends StatefulWidget {
   const RouteListScreen({super.key});
@@ -65,11 +67,6 @@ class _RouteListScreenState extends State<RouteListScreen> {
               onChanged: (value) {
                 _searchQuery = value;
                 _debouncer.call(() {
-                  final repo = context.read<PersistentRouteRepository>();
-                  final items = repo.items.where((r) =>
-                      r.name.toLowerCase().contains(value.toLowerCase()) ||
-                      r.origin.toLowerCase().contains(value.toLowerCase()) ||
-                      r.destination.toLowerCase().contains(value.toLowerCase()));
                   setState(() {});
                 });
               },
@@ -88,22 +85,29 @@ class _RouteListScreenState extends State<RouteListScreen> {
   }
 
   Widget _buildContent(RouteListNotifier notifier) {
-    final filteredItems = _searchQuery.isEmpty
-        ? notifier.items
-        : notifier.items.where((r) =>
-            r.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-            r.origin.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-            r.destination.toLowerCase().contains(_searchQuery.toLowerCase()))
-            .toList();
-
     switch (notifier.status) {
+      case LoadStatus.idle:
       case LoadStatus.loading:
         return const Center(child: CircularProgressIndicator());
+
       case LoadStatus.error:
-        return Center(child: Text('Ошибка: ${notifier.error}'));
+        return ErrorView(
+          message: notifier.error,
+          onRetry: () => notifier.load(),
+        );
+
       case LoadStatus.success:
+        final filteredItems = _searchQuery.isEmpty
+            ? notifier.items
+            : notifier.items
+                .where((r) =>
+                    r.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                    r.origin.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                    r.destination.toLowerCase().contains(_searchQuery.toLowerCase()))
+                .toList();
+
         if (filteredItems.isEmpty) {
-          return const Center(child: Text('Нет маршрутов'));
+          return const EmptyView(message: 'Нет маршрутов');
         }
         return ResponsiveList<model.Route>(
           items: filteredItems,
@@ -185,8 +189,6 @@ class _RouteListScreenState extends State<RouteListScreen> {
             ],
           ),
         );
-      default:
-        return const SizedBox.shrink();
     }
   }
 
@@ -218,17 +220,19 @@ class _RouteListScreenState extends State<RouteListScreen> {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<PersistentRouteRepository>(context, listen: false);
+      final repository = Provider.of<RouteRepository>(context, listen: false);
       await repository.softDelete(id);
+      if (!context.mounted) return;
       final notifier = Provider.of<RouteListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
-    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
-    final allOrders = await orderRepo.findAllWithDeleted();
+    final orderRepo = Provider.of<OrderRepository>(context, listen: false);
+    final allOrders = await orderRepo.findAll(includeDeleted: true);
     final relatedOrders = allOrders.where((o) => o.routeIds.contains(id) && !o.isDeleted).toList();
+    if (!context.mounted) return;
 
     if (relatedOrders.isNotEmpty) {
       await showDialog(
@@ -301,16 +305,17 @@ class _RouteListScreenState extends State<RouteListScreen> {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<PersistentRouteRepository>(context, listen: false);
+      final repository = Provider.of<RouteRepository>(context, listen: false);
       await repository.hardDelete(id);
+      if (!context.mounted) return;
       final notifier = Provider.of<RouteListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
 
   Future<void> _confirmDelete(BuildContext context, RouteListNotifier notifier) async {
-    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
-    final allOrders = await orderRepo.findAllWithDeleted();
+    final orderRepo = Provider.of<OrderRepository>(context, listen: false);
+    final allOrders = await orderRepo.findAll(includeDeleted: true);
     final routesWithOrders = <int>[];
 
     for (final id in notifier.selected) {
@@ -319,6 +324,7 @@ class _RouteListScreenState extends State<RouteListScreen> {
         routesWithOrders.add(id);
       }
     }
+    if (!context.mounted) return;
 
     if (routesWithOrders.isNotEmpty) {
       await showDialog(

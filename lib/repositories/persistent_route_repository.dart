@@ -1,8 +1,9 @@
-import 'package:shared_preferences/shared_preferences.dart';
 import '../models/route.dart';
 import 'base_repository.dart';
+import 'route_repository.dart';
 
-class PersistentRouteRepository extends BaseRepository<Route> {
+class PersistentRouteRepository extends BaseRepository<Route>
+    implements RouteRepository {
   PersistentRouteRepository(super.prefs, super.key);
 
   @override
@@ -67,15 +68,23 @@ class PersistentRouteRepository extends BaseRepository<Route> {
   }
 
   @override
-  Route _softDeleteItem(Route item) {
+  Route softDeleteItem(Route item) {
     return item.copyWith(deletedAt: DateTime.now());
   }
 
   @override
-  Route _restoreItem(Route item) {
+  Route restoreItem(Route item) {
     return item.copyWith(clearDeletedAt: true);
   }
 
+  @override
+  Future<List<Route>> findAll({bool includeDeleted = false}) async {
+    await Future.delayed(const Duration(milliseconds: 50));
+    if (includeDeleted) return List.from(items);
+    return items.where((r) => !r.isDeleted).toList();
+  }
+
+  @override
   Future<List<Route>> findByVehicleId(int vehicleId) async {
     await Future.delayed(const Duration(milliseconds: 50));
     return items

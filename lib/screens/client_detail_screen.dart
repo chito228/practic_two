@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import '../repositories/persistent_client_repository.dart';
-import '../repositories/persistent_order_repository.dart';
+import '../repositories/client_repository.dart';
+import '../repositories/order_repository.dart';
 import '../state/client_list_notifier.dart';
-import '../models/client.dart';
 
 class ClientDetailScreen extends StatelessWidget {
   final int id;
@@ -12,7 +11,7 @@ class ClientDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final repository = Provider.of<PersistentClientRepository>(context);
+    final repository = Provider.of<ClientRepository>(context);
     return FutureBuilder(
       future: repository.findById(id),
       builder: (context, snapshot) {
@@ -125,7 +124,7 @@ class ClientDetailScreen extends StatelessWidget {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<PersistentClientRepository>(context, listen: false);
+      final repository = Provider.of<ClientRepository>(context, listen: false);
       await repository.softDelete(id);
       final notifier = Provider.of<ClientListNotifier>(context, listen: false);
       await notifier.load();
@@ -137,11 +136,9 @@ class ClientDetailScreen extends StatelessWidget {
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
-    // 1. Проверяем, есть ли у клиента заказы
-    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
+    final orderRepo = Provider.of<OrderRepository>(context, listen: false);
     final orders = await orderRepo.findByClientId(id);
-    
-    // 2. Если есть заказы → показываем диалог с запретом
+
     if (orders.isNotEmpty) {
       await showDialog(
         context: context,
@@ -198,7 +195,6 @@ class ClientDetailScreen extends StatelessWidget {
       return;
     }
 
-    // 3. Если заказов нет → спрашиваем подтверждение
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -232,10 +228,9 @@ class ClientDetailScreen extends StatelessWidget {
         ],
       ),
     );
-    
-    // 4. Если подтвердил → удаляем
+
     if (confirmed == true) {
-      final repository = Provider.of<PersistentClientRepository>(context, listen: false);
+      final repository = Provider.of<ClientRepository>(context, listen: false);
       await repository.hardDelete(id);
       final notifier = Provider.of<ClientListNotifier>(context, listen: false);
       await notifier.load();
@@ -265,7 +260,7 @@ class ClientDetailScreen extends StatelessWidget {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<PersistentClientRepository>(context, listen: false);
+      final repository = Provider.of<ClientRepository>(context, listen: false);
       await repository.restore(id);
       final notifier = Provider.of<ClientListNotifier>(context, listen: false);
       await notifier.load();

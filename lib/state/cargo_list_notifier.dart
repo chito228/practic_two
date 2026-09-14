@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import '../repositories/persistent_cargo_repository.dart';
+import '../repositories/cargo_repository.dart';
 import '../models/cargo.dart';
 import 'load_status.dart';
-import 'page_result.dart';
 
 class CargoListNotifier extends ChangeNotifier {
-  final PersistentCargoRepository _repository;
+  final CargoRepository _repository;
+
   CargoListNotifier(this._repository);
 
   List<Cargo> _items = [];

@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import '../repositories/persistent_vehicle_repository.dart';
-import '../repositories/persistent_route_repository.dart';
+import '../repositories/vehicle_repository.dart';
+import '../repositories/route_repository.dart';
 import '../state/vehicle_list_notifier.dart';
-import '../models/vehicle.dart';
 
 class VehicleDetailScreen extends StatelessWidget {
   final int id;
@@ -12,7 +11,7 @@ class VehicleDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final repository = Provider.of<PersistentVehicleRepository>(context);
+    final repository = Provider.of<VehicleRepository>(context);
     return FutureBuilder(
       future: repository.findById(id),
       builder: (context, snapshot) {
@@ -145,7 +144,7 @@ class VehicleDetailScreen extends StatelessWidget {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<PersistentVehicleRepository>(context, listen: false);
+      final repository = Provider.of<VehicleRepository>(context, listen: false);
       await repository.softDelete(id);
       final notifier = Provider.of<VehicleListNotifier>(context, listen: false);
       await notifier.load();
@@ -157,7 +156,7 @@ class VehicleDetailScreen extends StatelessWidget {
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
-    final routeRepo = Provider.of<PersistentRouteRepository>(context, listen: false);
+    final routeRepo = Provider.of<RouteRepository>(context, listen: false);
     final routes = await routeRepo.findByVehicleId(id);
 
     if (routes.isNotEmpty) {
@@ -228,7 +227,7 @@ class VehicleDetailScreen extends StatelessWidget {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<PersistentVehicleRepository>(context, listen: false);
+      final repository = Provider.of<VehicleRepository>(context, listen: false);
       await repository.hardDelete(id);
       final notifier = Provider.of<VehicleListNotifier>(context, listen: false);
       await notifier.load();
@@ -258,7 +257,7 @@ class VehicleDetailScreen extends StatelessWidget {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<PersistentVehicleRepository>(context, listen: false);
+      final repository = Provider.of<VehicleRepository>(context, listen: false);
       await repository.restore(id);
       final notifier = Provider.of<VehicleListNotifier>(context, listen: false);
       await notifier.load();

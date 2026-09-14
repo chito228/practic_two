@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import '../repositories/persistent_cargo_repository.dart';
-import '../repositories/persistent_order_repository.dart';
+import '../repositories/cargo_repository.dart';
+import '../repositories/order_repository.dart';
 import '../state/cargo_list_notifier.dart';
-import '../models/cargo.dart';
 
 class CargoDetailScreen extends StatelessWidget {
   final int id;
@@ -12,7 +11,7 @@ class CargoDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final repository = Provider.of<PersistentCargoRepository>(context);
+    final repository = Provider.of<CargoRepository>(context);
     return FutureBuilder(
       future: repository.findById(id),
       builder: (context, snapshot) {
@@ -116,7 +115,7 @@ class CargoDetailScreen extends StatelessWidget {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<PersistentCargoRepository>(context, listen: false);
+      final repository = Provider.of<CargoRepository>(context, listen: false);
       await repository.softDelete(id);
       final notifier = Provider.of<CargoListNotifier>(context, listen: false);
       await notifier.load();
@@ -128,8 +127,8 @@ class CargoDetailScreen extends StatelessWidget {
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
-    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
-    final allOrders = await orderRepo.findAllWithDeleted();
+    final orderRepo = Provider.of<OrderRepository>(context, listen: false);
+    final allOrders = await orderRepo.findAll(includeDeleted: true);
     final relatedOrders = allOrders.where((o) => o.cargoIds.contains(id) && !o.isDeleted).toList();
 
     if (relatedOrders.isNotEmpty) {
@@ -203,7 +202,7 @@ class CargoDetailScreen extends StatelessWidget {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<PersistentCargoRepository>(context, listen: false);
+      final repository = Provider.of<CargoRepository>(context, listen: false);
       await repository.hardDelete(id);
       final notifier = Provider.of<CargoListNotifier>(context, listen: false);
       await notifier.load();
@@ -233,7 +232,7 @@ class CargoDetailScreen extends StatelessWidget {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<PersistentCargoRepository>(context, listen: false);
+      final repository = Provider.of<CargoRepository>(context, listen: false);
       await repository.restore(id);
       final notifier = Provider.of<CargoListNotifier>(context, listen: false);
       await notifier.load();

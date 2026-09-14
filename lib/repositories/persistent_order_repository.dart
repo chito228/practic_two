@@ -1,11 +1,28 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:dio/dio.dart';
 import '../models/order.dart';
+import '../models/cargo.dart';
+import '../models/route.dart' as model;
 import 'base_repository.dart';
+import 'order_repository.dart';
+import 'client_repository.dart';
+import 'cargo_repository.dart';
+import 'route_repository.dart';
 import '../state/order_query.dart';
 import '../state/page_result.dart';
 
-class PersistentOrderRepository extends BaseRepository<Order> {
-  PersistentOrderRepository(super.prefs, super.key);
+class PersistentOrderRepository extends BaseRepository<Order>
+    implements OrderRepository {
+  final ClientRepository clients;
+  final CargoRepository cargos;
+  final RouteRepository routes;
+
+  PersistentOrderRepository(
+    super.prefs,
+    super.key, {
+    required this.clients,
+    required this.cargos,
+    required this.routes,
+  });
 
   @override
   String get key => 'orders_v1';
@@ -99,18 +116,23 @@ class PersistentOrderRepository extends BaseRepository<Order> {
   }
 
   @override
-  Order _softDeleteItem(Order item) {
+  Order softDeleteItem(Order item) {
     return item.copyWith(deletedAt: DateTime.now());
   }
 
   @override
-  Order _restoreItem(Order item) {
+  Order restoreItem(Order item) {
     return item.copyWith(clearDeletedAt: true);
   }
 
-  // ============================================================
-  // ДОБАВЛЕННЫЙ МЕТОД findByClientId
-  // ============================================================
+  @override
+  Future<List<Order>> findAll({bool includeDeleted = false}) async {
+    await Future.delayed(const Duration(milliseconds: 50));
+    if (includeDeleted) return List.from(items);
+    return items.where((o) => !o.isDeleted).toList();
+  }
+
+  @override
   Future<List<Order>> findByClientId(int clientId) async {
     await Future.delayed(const Duration(milliseconds: 50));
     return items
@@ -118,7 +140,11 @@ class PersistentOrderRepository extends BaseRepository<Order> {
         .toList();
   }
 
-  Future<PageResult<Order>> find(OrderQuery query) async {
+  @override
+  Future<PageResult<Order>> find(
+    OrderQuery query, {
+    CancelToken? cancelToken,
+  }) async {
     await Future.delayed(const Duration(milliseconds: 250));
 
     var rows = items
@@ -127,9 +153,11 @@ class PersistentOrderRepository extends BaseRepository<Order> {
 
     if (query.search.trim().isNotEmpty) {
       final needle = query.search.trim().toLowerCase();
-      rows = rows.where((o) =>
-          o.orderNumber.toLowerCase().contains(needle) ||
-          o.cargoDescription.toLowerCase().contains(needle)).toList();
+      rows = rows
+          .where((o) =>
+              o.orderNumber.toLowerCase().contains(needle) ||
+              o.cargoDescription.toLowerCase().contains(needle))
+          .toList();
     }
 
     if (query.status != null) {
@@ -149,15 +177,19 @@ class PersistentOrderRepository extends BaseRepository<Order> {
     }
 
     if (query.dateFrom != null) {
-      rows = rows.where((o) =>
-          o.shippingDate.isAfter(query.dateFrom!) ||
-          o.shippingDate.isAtSameMomentAs(query.dateFrom!)).toList();
+      rows = rows
+          .where((o) =>
+              o.shippingDate.isAfter(query.dateFrom!) ||
+              o.shippingDate.isAtSameMomentAs(query.dateFrom!))
+          .toList();
     }
 
     if (query.dateTo != null) {
-      rows = rows.where((o) =>
-          o.shippingDate.isBefore(query.dateTo!) ||
-          o.shippingDate.isAtSameMomentAs(query.dateTo!)).toList();
+      rows = rows
+          .where((o) =>
+              o.shippingDate.isBefore(query.dateTo!) ||
+              o.shippingDate.isAtSameMomentAs(query.dateTo!))
+          .toList();
     }
 
     rows.sort((a, b) {
@@ -191,6 +223,33 @@ class PersistentOrderRepository extends BaseRepository<Order> {
       page: query.page,
       size: query.size,
       total: total,
+    );
+  }
+
+  @override
+  Future<OrderFull?> findByIdWithRelations(int id) async {
+    final order = await findById(id);
+    if (order == null) return null;
+
+    final client = await clients.findById(order.clientId);
+
+    final cargo = <Cargo>[];
+    for (final cargoId in order.cargoIds) {
+      final c = await cargos.findById(cargoId);
+      if (c != null) cargo.add(c);
+    }
+
+    final routesList = <model.Route>[];
+    for (final routeId in order.routeIds) {
+      final r = await routes.findById(routeId);
+      if (r != null) routesList.add(r);
+    }
+
+    return OrderFull(
+      order: order,
+      client: client,
+      cargo: cargo,
+      routes: routesList,
     );
   }
 }

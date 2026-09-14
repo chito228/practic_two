@@ -5,12 +5,14 @@ import '../state/client_list_notifier.dart';
 import '../models/client.dart';
 import '../widgets/entity_table.dart';
 import '../widgets/responsive_list.dart';
+import '../widgets/error_view.dart';
+import '../widgets/empty_view.dart';
 import '../utils/debounce.dart';
 import '../state/load_status.dart';
 import '../state/client_query.dart';
 import '../widgets/pagination_controls.dart';
-import '../repositories/persistent_client_repository.dart';
-import '../repositories/persistent_order_repository.dart';
+import '../repositories/client_repository.dart';
+import '../repositories/order_repository.dart';
 
 class ClientListScreen extends StatefulWidget {
   const ClientListScreen({super.key});
@@ -126,25 +128,26 @@ class _ClientListScreenState extends State<ClientListScreen> {
           Expanded(
             child: _buildContent(notifier),
           ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 80.0),
-            child: PaginationControls(
-              currentPage: notifier.query.page,
-              totalPages: notifier.result.totalPages,
-              totalItems: notifier.result.total,
-              pageSize: notifier.query.size,
-              onPageChanged: (page) {
-                notifier.applyQuery(
-                  notifier.query.copyWith(page: page),
-                );
-              },
-              onSizeChanged: (size) {
-                notifier.applyQuery(
-                  notifier.query.copyWith(size: size, page: 1),
-                );
-              },
+          if (notifier.status == LoadStatus.success && notifier.result.total > 0)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 80.0),
+              child: PaginationControls(
+                currentPage: notifier.query.page,
+                totalPages: notifier.result.totalPages,
+                totalItems: notifier.result.total,
+                pageSize: notifier.query.size,
+                onPageChanged: (page) {
+                  notifier.applyQuery(
+                    notifier.query.copyWith(page: page),
+                  );
+                },
+                onSizeChanged: (size) {
+                  notifier.applyQuery(
+                    notifier.query.copyWith(size: size, page: 1),
+                  );
+                },
+              ),
             ),
-          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -156,13 +159,19 @@ class _ClientListScreenState extends State<ClientListScreen> {
 
   Widget _buildContent(ClientListNotifier notifier) {
     switch (notifier.status) {
+      case LoadStatus.idle:
       case LoadStatus.loading:
         return const Center(child: CircularProgressIndicator());
+
       case LoadStatus.error:
-        return Center(child: Text('Ошибка: ${notifier.error}'));
+        return ErrorView(
+          message: notifier.error,
+          onRetry: () => notifier.load(),
+        );
+
       case LoadStatus.success:
         if (notifier.result.items.isEmpty) {
-          return const Center(child: Text('Нет клиентов'));
+          return const EmptyView(message: 'Нет клиентов');
         }
         return ResponsiveList<Client>(
           items: notifier.result.items,
@@ -245,8 +254,6 @@ class _ClientListScreenState extends State<ClientListScreen> {
             ],
           ),
         );
-      default:
-        return const SizedBox.shrink();
     }
   }
 
@@ -269,16 +276,18 @@ class _ClientListScreenState extends State<ClientListScreen> {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<PersistentClientRepository>(context, listen: false);
+      final repository = Provider.of<ClientRepository>(context, listen: false);
       await repository.softDelete(id);
+      if (!context.mounted) return;
       final notifier = Provider.of<ClientListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
-    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
+    final orderRepo = Provider.of<OrderRepository>(context, listen: false);
     final orders = await orderRepo.findByClientId(id);
+    if (!context.mounted) return;
 
     if (orders.isNotEmpty) {
       await showDialog(
@@ -286,10 +295,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
         builder: (context) => AlertDialog(
           title: const Text(
             'Невозможно удалить клиента',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -310,10 +316,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
               const SizedBox(height: 12),
               Text(
                 'Количество заказов: ${orders.length}',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -325,10 +328,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'OK',
-                style: TextStyle(fontSize: 14),
-              ),
+              child: const Text('OK', style: TextStyle(fontSize: 14)),
             ),
           ],
         ),
@@ -341,10 +341,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
       builder: (context) => AlertDialog(
         title: const Text(
           'Удалить клиента навсегда?',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         content: const Text(
           'Это действие нельзя отменить!\n\n'
@@ -354,29 +351,24 @@ class _ClientListScreenState extends State<ClientListScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text(
-              'Отмена',
-              style: TextStyle(fontSize: 14),
-            ),
+            child: const Text('Отмена', style: TextStyle(fontSize: 14)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Удалить навсегда',
-              style: TextStyle(fontSize: 14, color: Colors.red),
-            ),
+            child: const Text('Удалить навсегда', style: TextStyle(fontSize: 14, color: Colors.red)),
           ),
         ],
       ),
     );
 
     if (confirmed == true) {
-      final repository = Provider.of<PersistentClientRepository>(context, listen: false);
+      final repository = Provider.of<ClientRepository>(context, listen: false);
       await repository.hardDelete(id);
+      if (!context.mounted) return;
       final notifier = Provider.of<ClientListNotifier>(context, listen: false);
       await notifier.load();
 
-      if (mounted) {
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Клиент удалён навсегда'),
@@ -388,7 +380,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
   }
 
   Future<void> _confirmDelete(BuildContext context, ClientListNotifier notifier) async {
-    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
+    final orderRepo = Provider.of<OrderRepository>(context, listen: false);
     final clientsWithOrders = <int>[];
 
     for (final id in notifier.selected) {
@@ -397,6 +389,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
         clientsWithOrders.add(id);
       }
     }
+    if (!context.mounted) return;
 
     if (clientsWithOrders.isNotEmpty) {
       await showDialog(
@@ -404,10 +397,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
         builder: (context) => AlertDialog(
           title: const Text(
             'Невозможно удалить клиентов',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           content: Text(
             '${clientsWithOrders.length} клиент(ов) имеют активные заказы.\n\n'
@@ -417,10 +407,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'OK',
-                style: TextStyle(fontSize: 14),
-              ),
+              child: const Text('OK', style: TextStyle(fontSize: 14)),
             ),
           ],
         ),
@@ -431,31 +418,16 @@ class _ClientListScreenState extends State<ClientListScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text(
-          'Подтверждение удаления',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: Text(
-          'Вы уверены, что хотите удалить ${notifier.selected.length} клиентов?',
-          style: const TextStyle(fontSize: 14),
-        ),
+        title: const Text('Подтверждение удаления'),
+        content: Text('Вы уверены, что хотите удалить ${notifier.selected.length} клиентов?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text(
-              'Отмена',
-              style: TextStyle(fontSize: 14),
-            ),
+            child: const Text('Отмена'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Удалить',
-              style: TextStyle(fontSize: 14, color: Colors.red),
-            ),
+            child: const Text('Удалить'),
           ),
         ],
       ),

@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import '../core/reference_cache.dart';
 import '../state/order_list_notifier.dart';
 import '../models/order.dart';
 import '../widgets/entity_table.dart';
 import '../widgets/responsive_list.dart';
+import '../widgets/error_view.dart';
+import '../widgets/empty_view.dart';
 import '../utils/debounce.dart';
 import '../state/load_status.dart';
 import '../state/order_query.dart';
 import '../widgets/pagination_controls.dart';
-import '../repositories/persistent_order_repository.dart';
-import '../repositories/persistent_client_repository.dart';
-import '../repositories/persistent_cargo_repository.dart';
-import '../repositories/persistent_route_repository.dart';
+import '../repositories/order_repository.dart';
+import '../repositories/client_repository.dart';
+import '../repositories/cargo_repository.dart';
+import '../repositories/route_repository.dart';
 
 class OrderListScreen extends StatefulWidget {
   const OrderListScreen({super.key});
@@ -32,11 +35,22 @@ class _OrderListScreenState extends State<OrderListScreen> {
   }
 
   Future<void> _loadClientNames() async {
-    final clientRepo = context.read<PersistentClientRepository>();
-    final clients = await clientRepo.findAll();
-    setState(() {
-      _clientNames = {for (var c in clients) c.id: c.companyName};
-    });
+    try {
+      final cache = context.read<ReferenceCache>();
+      final clientRepo = context.read<ClientRepository>();
+
+      // Используем общий кэш: если клиенты уже загружены —
+      // запрос к серверу не уйдёт.
+      final clients = await cache.load('clients', () => clientRepo.findAll());
+
+      if (!mounted) return;
+      setState(() {
+        _clientNames = {for (var c in clients) c.id: c.companyName};
+      });
+    } catch (_) {
+      // Игнорируем: имена клиентов — вторичные данные.
+      // Если загрузка не удалась, в списке покажем «Клиент ID».
+    }
   }
 
   @override
@@ -172,25 +186,26 @@ class _OrderListScreenState extends State<OrderListScreen> {
           Expanded(
             child: _buildContent(notifier),
           ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 80.0),
-            child: PaginationControls(
-              currentPage: notifier.query.page,
-              totalPages: notifier.result.totalPages,
-              totalItems: notifier.result.total,
-              pageSize: notifier.query.size,
-              onPageChanged: (page) {
-                notifier.applyQuery(
-                  notifier.query.copyWith(page: page),
-                );
-              },
-              onSizeChanged: (size) {
-                notifier.applyQuery(
-                  notifier.query.copyWith(size: size, page: 1),
-                );
-              },
+          if (notifier.status == LoadStatus.success && notifier.result.total > 0)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 80.0),
+              child: PaginationControls(
+                currentPage: notifier.query.page,
+                totalPages: notifier.result.totalPages,
+                totalItems: notifier.result.total,
+                pageSize: notifier.query.size,
+                onPageChanged: (page) {
+                  notifier.applyQuery(
+                    notifier.query.copyWith(page: page),
+                  );
+                },
+                onSizeChanged: (size) {
+                  notifier.applyQuery(
+                    notifier.query.copyWith(size: size, page: 1),
+                  );
+                },
+              ),
             ),
-          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -211,13 +226,19 @@ class _OrderListScreenState extends State<OrderListScreen> {
 
   Widget _buildContent(OrderListNotifier notifier) {
     switch (notifier.status) {
+      case LoadStatus.idle:
       case LoadStatus.loading:
         return const Center(child: CircularProgressIndicator());
+
       case LoadStatus.error:
-        return Center(child: Text('Ошибка: ${notifier.error}'));
+        return ErrorView(
+          message: notifier.error,
+          onRetry: () => notifier.load(),
+        );
+
       case LoadStatus.success:
         if (notifier.result.items.isEmpty) {
-          return const Center(child: Text('Нет заказов'));
+          return const EmptyView(message: 'Нет заказов');
         }
         return ResponsiveList<Order>(
           items: notifier.result.items,
@@ -311,8 +332,6 @@ class _OrderListScreenState extends State<OrderListScreen> {
             ],
           ),
         );
-      default:
-        return const SizedBox.shrink();
     }
   }
 
@@ -335,22 +354,23 @@ class _OrderListScreenState extends State<OrderListScreen> {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<PersistentOrderRepository>(context, listen: false);
+      final repository = Provider.of<OrderRepository>(context, listen: false);
       await repository.softDelete(id);
+      if (!context.mounted) return;
       final notifier = Provider.of<OrderListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
-    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
+    final orderRepo = Provider.of<OrderRepository>(context, listen: false);
     final order = await orderRepo.findById(id);
-    if (order == null) return;
+    if (order == null || !context.mounted) return;
 
     final related = <String>[];
 
     if (order.clientId > 0) {
-      final clientRepo = Provider.of<PersistentClientRepository>(context, listen: false);
+      final clientRepo = Provider.of<ClientRepository>(context, listen: false);
       final client = await clientRepo.findById(order.clientId);
       if (client != null) {
         related.add('• Клиент: ${client.companyName}');
@@ -358,7 +378,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
     }
 
     if (order.cargoIds.isNotEmpty) {
-      final cargoRepo = Provider.of<PersistentCargoRepository>(context, listen: false);
+      final cargoRepo = Provider.of<CargoRepository>(context, listen: false);
       for (final cargoId in order.cargoIds) {
         final cargo = await cargoRepo.findById(cargoId);
         if (cargo != null) {
@@ -368,7 +388,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
     }
 
     if (order.routeIds.isNotEmpty) {
-      final routeRepo = Provider.of<PersistentRouteRepository>(context, listen: false);
+      final routeRepo = Provider.of<RouteRepository>(context, listen: false);
       for (final routeId in order.routeIds) {
         final route = await routeRepo.findById(routeId);
         if (route != null) {
@@ -376,6 +396,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
         }
       }
     }
+    if (!context.mounted) return;
 
     if (related.isNotEmpty) {
       await showDialog(
@@ -445,15 +466,16 @@ class _OrderListScreenState extends State<OrderListScreen> {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<PersistentOrderRepository>(context, listen: false);
+      final repository = Provider.of<OrderRepository>(context, listen: false);
       await repository.hardDelete(id);
+      if (!context.mounted) return;
       final notifier = Provider.of<OrderListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
 
   Future<void> _confirmDelete(BuildContext context, OrderListNotifier notifier) async {
-    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
+    final orderRepo = Provider.of<OrderRepository>(context, listen: false);
     final ordersWithRelations = <int>[];
 
     for (final id in notifier.selected) {
@@ -463,6 +485,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
         ordersWithRelations.add(id);
       }
     }
+    if (!context.mounted) return;
 
     if (ordersWithRelations.isNotEmpty) {
       await showDialog(

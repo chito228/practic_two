@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import '../core/reference_cache.dart';
 import '../models/client.dart';
-import '../repositories/persistent_client_repository.dart';
+import '../repositories/client_repository.dart';
 import '../widgets/generic_form.dart';
 import '../state/client_list_notifier.dart';
 
@@ -28,8 +29,9 @@ class _ClientFormScreenState extends State<ClientFormScreen> {
 
   Future<void> _loadData() async {
     if (widget.isEditing) {
-      final repo = context.read<PersistentClientRepository>();
+      final repo = context.read<ClientRepository>();
       final c = await repo.findById(widget.id!);
+      if (!mounted) return;
       if (c != null) _client = c;
     } else {
       _client = Client(
@@ -46,7 +48,8 @@ class _ClientFormScreenState extends State<ClientFormScreen> {
   }
 
   Future<void> _save(Map<String, dynamic> values) async {
-    final repo = context.read<PersistentClientRepository>();
+    final repo = context.read<ClientRepository>();
+    final cache = context.read<ReferenceCache>();
     final addressValue = (values['address'] as String?)?.trim() ?? '';
 
     final newClient = Client(
@@ -59,12 +62,19 @@ class _ClientFormScreenState extends State<ClientFormScreen> {
       orderIds: _client?.orderIds ?? [],
     );
 
+    // Исключения ValidationException / ConflictException пробрасываются
+    // наружу — их ловит GenericForm и показывает в полях / snackbar.
     if (widget.isEditing) {
       await repo.update(newClient);
     } else {
       await repo.create(newClient);
     }
 
+    // Сбрасываем кэш справочника клиентов: следующий запрос
+    // к кэшу подтянет свежие данные (с новым/изменённым клиентом).
+    cache.invalidate('clients');
+
+    if (!mounted) return;
     final notifier = context.read<ClientListNotifier>();
     await notifier.load();
 

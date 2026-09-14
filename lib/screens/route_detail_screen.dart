@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import '../repositories/persistent_route_repository.dart';
-import '../repositories/persistent_vehicle_repository.dart';
-import '../repositories/persistent_order_repository.dart';
+import '../repositories/route_repository.dart';
+import '../repositories/vehicle_repository.dart';
+import '../repositories/order_repository.dart';
 import '../state/route_list_notifier.dart';
-import '../models/route.dart' as model;
 import '../models/vehicle.dart';
 
 class RouteDetailScreen extends StatefulWidget {
@@ -21,7 +20,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final repository = Provider.of<PersistentRouteRepository>(context);
+    final repository = Provider.of<RouteRepository>(context);
     return FutureBuilder(
       future: repository.findById(widget.id),
       builder: (context, snapshot) {
@@ -39,7 +38,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
         }
         final route = snapshot.data!;
         return FutureBuilder(
-          future: context.read<PersistentVehicleRepository>().findById(route.vehicleId),
+          future: context.read<VehicleRepository>().findById(route.vehicleId),
           builder: (context, vehicleSnapshot) {
             if (vehicleSnapshot.hasData) {
               _vehicle = vehicleSnapshot.data;
@@ -149,7 +148,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<PersistentRouteRepository>(context, listen: false);
+      final repository = Provider.of<RouteRepository>(context, listen: false);
       await repository.softDelete(id);
       final notifier = Provider.of<RouteListNotifier>(context, listen: false);
       await notifier.load();
@@ -161,8 +160,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
-    final orderRepo = Provider.of<PersistentOrderRepository>(context, listen: false);
-    final allOrders = await orderRepo.findAllWithDeleted();
+    final orderRepo = Provider.of<OrderRepository>(context, listen: false);
+    final allOrders = await orderRepo.findAll(includeDeleted: true);
     final relatedOrders = allOrders.where((o) => o.routeIds.contains(id) && !o.isDeleted).toList();
 
     if (relatedOrders.isNotEmpty) {
@@ -236,7 +235,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<PersistentRouteRepository>(context, listen: false);
+      final repository = Provider.of<RouteRepository>(context, listen: false);
       await repository.hardDelete(id);
       final notifier = Provider.of<RouteListNotifier>(context, listen: false);
       await notifier.load();
@@ -266,7 +265,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<PersistentRouteRepository>(context, listen: false);
+      final repository = Provider.of<RouteRepository>(context, listen: false);
       await repository.restore(id);
       final notifier = Provider.of<RouteListNotifier>(context, listen: false);
       await notifier.load();

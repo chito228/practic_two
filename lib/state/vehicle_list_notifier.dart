@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import '../repositories/persistent_vehicle_repository.dart';
+import '../repositories/vehicle_repository.dart';
 import '../models/vehicle.dart';
 import 'load_status.dart';
-import 'page_result.dart';
 
 class VehicleListNotifier extends ChangeNotifier {
-  final PersistentVehicleRepository _repository;
+  final VehicleRepository _repository;
+
   VehicleListNotifier(this._repository);
 
   List<Vehicle> _items = [];

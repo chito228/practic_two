@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+import '../core/api_exceptions.dart';
 import '../validators/validators.dart';
 
 enum FormFieldType {
@@ -69,6 +71,10 @@ class _GenericFormState extends State<GenericForm> {
   bool _isSaving = false;
   bool _hasUnsavedChanges = false;
 
+  /// Ошибки, пришедшие с сервера (422). Ключи совпадают
+  /// с ключами полей формы — раскладываются автоматически.
+  Map<String, String> _serverErrors = {};
+
   @override
   void initState() {
     super.initState();
@@ -109,7 +115,7 @@ class _GenericFormState extends State<GenericForm> {
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       ElevatedButton(
-                        onPressed: _handleCancel,
+                        onPressed: _isSaving ? null : _handleCancel,
                         child: const Text('Отмена'),
                       ),
                       ElevatedButton(
@@ -163,6 +169,7 @@ class _GenericFormState extends State<GenericForm> {
             onChanged: (v) {
               _values[config.key] = v;
               _hasUnsavedChanges = true;
+              _clearServerError(config.key);
             },
             validator: (v) => _validateField(config, v),
           ),
@@ -183,6 +190,7 @@ class _GenericFormState extends State<GenericForm> {
             onChanged: (v) {
               _values[config.key] = v;
               _hasUnsavedChanges = true;
+              _clearServerError(config.key);
             },
             validator: (v) => _validateField(config, v),
           ),
@@ -203,6 +211,7 @@ class _GenericFormState extends State<GenericForm> {
             onChanged: (v) {
               _values[config.key] = v;
               _hasUnsavedChanges = true;
+              _clearServerError(config.key);
             },
             validator: (v) => _validateField(config, v),
           ),
@@ -223,6 +232,7 @@ class _GenericFormState extends State<GenericForm> {
             onChanged: (v) {
               _values[config.key] = v;
               _hasUnsavedChanges = true;
+              _clearServerError(config.key);
             },
             validator: (v) => _validateField(config, v),
           ),
@@ -243,6 +253,7 @@ class _GenericFormState extends State<GenericForm> {
             onChanged: (v) {
               _values[config.key] = v;
               _hasUnsavedChanges = true;
+              _clearServerError(config.key);
             },
             validator: (v) => _validateField(config, v),
           ),
@@ -262,6 +273,7 @@ class _GenericFormState extends State<GenericForm> {
               setState(() {
                 _values[config.key] = v;
                 _hasUnsavedChanges = true;
+                _clearServerError(config.key);
               });
             },
             validator: (v) => _validateField(config, v),
@@ -308,8 +320,12 @@ class _GenericFormState extends State<GenericForm> {
 
     return FormField<List<int>>(
       initialValue: selectedIds,
-      validator: (value) =>
-          (value?.isEmpty ?? true) ? 'Выберите хотя бы один элемент' : null,
+      validator: (value) {
+        // Сначала серверная ошибка, потом клиентская.
+        final serverError = _serverErrors[config.key];
+        if (serverError != null) return serverError;
+        return (value?.isEmpty ?? true) ? 'Выберите хотя бы один элемент' : null;
+      },
       builder: (field) {
         return InputDecorator(
           decoration: InputDecoration(
@@ -346,6 +362,7 @@ class _GenericFormState extends State<GenericForm> {
                         setState(() {
                           _values[config.key] = next;
                           _hasUnsavedChanges = true;
+                          _clearServerError(config.key);
                         });
                       },
                     );
@@ -368,21 +385,40 @@ class _GenericFormState extends State<GenericForm> {
       setState(() {
         _values[key] = date;
         _hasUnsavedChanges = true;
+        _clearServerError(key);
+      });
+    }
+  }
+
+  /// Очистка серверной ошибки конкретного поля.
+  /// Вызывается при любом изменении поля, чтобы ошибка
+  /// исчезала, как только пользователь начал исправлять.
+  void _clearServerError(String key) {
+    if (_serverErrors.containsKey(key)) {
+      setState(() {
+        _serverErrors.remove(key);
       });
     }
   }
 
   String? _validateField(FormFieldConfig config, dynamic value) {
+    // 1. Серверная ошибка имеет приоритет.
+    final serverError = _serverErrors[config.key];
+    if (serverError != null) return serverError;
+
     final strValue = value?.toString().trim() ?? '';
 
+    // 2. Обязательность.
     if (config.required && strValue.isEmpty) {
       return '${config.label} обязательно для заполнения';
     }
 
+    // 3. Кастомный валидатор.
     if (config.validator != null) {
       return config.validator!(value);
     }
 
+    // 4. Стандартные проверки по типу поля.
     switch (config.type) {
       case FormFieldType.email:
         return Validators.email(strValue);
@@ -432,6 +468,9 @@ class _GenericFormState extends State<GenericForm> {
   }
 
   Future<void> _save() async {
+    // Сбрасываем прошлые серверные ошибки.
+    setState(() => _serverErrors = {});
+
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isSaving = true);
@@ -446,7 +485,29 @@ class _GenericFormState extends State<GenericForm> {
           ),
         );
       }
+    } on ValidationException catch (e) {
+      // 422: раскладываем ошибки по полям.
+      setState(() {
+        _serverErrors = Map<String, String>.from(e.errors);
+      });
+      // Перерисовываем поля, чтобы показать ошибки.
+      _formKey.currentState!.validate();
+    } on ConflictException catch (e) {
+      // 409: показываем snackbar с текстом от сервера.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    } on ApiException catch (e) {
+      // Прочие доменные ошибки (Network, Forbidden, NotFound, Server).
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
     } catch (e) {
+      // На всякий случай — неизвестная ошибка.
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Ошибка: $e')),

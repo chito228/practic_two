@@ -1,14 +1,16 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import '../core/reference_cache.dart';
 import '../models/order.dart';
 import '../models/client.dart';
 import '../models/cargo.dart';
 import '../models/route.dart' as model;
-import '../repositories/persistent_order_repository.dart';
-import '../repositories/persistent_client_repository.dart';
-import '../repositories/persistent_cargo_repository.dart';
-import '../repositories/persistent_route_repository.dart';
+import '../repositories/order_repository.dart';
+import '../repositories/client_repository.dart';
+import '../repositories/cargo_repository.dart';
+import '../repositories/route_repository.dart';
 import '../widgets/generic_form.dart';
 import '../state/order_list_notifier.dart';
 
@@ -36,37 +38,52 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
   }
 
   Future<void> _loadData() async {
-    final clientRepo = context.read<PersistentClientRepository>();
-    final cargoRepo = context.read<PersistentCargoRepository>();
-    final routeRepo = context.read<PersistentRouteRepository>();
+    try {
+      // Репозитории читаем СИНХРОННО, до первого await.
+      // context.read<T>() нельзя вызывать внутри асинхронных callback'ов
+      // после await — иначе ProviderNotFoundException или зависание.
+      final cache = context.read<ReferenceCache>();
+      final clientRepo = context.read<ClientRepository>();
+      final cargoRepo = context.read<CargoRepository>();
+      final routeRepo = context.read<RouteRepository>();
 
-    _clients = await clientRepo.findAllWithDeleted();
-    _cargoList = await cargoRepo.findAllWithDeleted();
-    _routeList = await routeRepo.findAllWithDeleted();
+      // Справочники берём из кэша. Первый запрос — HTTP,
+      // повторные — из памяти, без запроса к серверу.
+      _clients = await cache.load('clients', () => clientRepo.findAll());
+      _cargoList = await cache.load('cargo', () => cargoRepo.findAll());
+      _routeList = await cache.load('routes', () => routeRepo.findAll());
 
-    if (widget.isEditing) {
-      final orderRepo = context.read<PersistentOrderRepository>();
-      final o = await orderRepo.findById(widget.id!);
-      if (o != null) _order = o;
-    } else {
-      _order = Order(
-        id: 0,
-        orderNumber: 'ORD-${DateTime.now().millisecondsSinceEpoch}',
-        clientId: _clients.isNotEmpty ? _clients.first.id : 0,
-        cargoIds: [],
-        routeIds: [],
-        cargoDescription: '',
-        weight: 0.0,
-        volume: 0.0,
-        shippingDate: DateTime.now(),
-        status: 'in_transit',
-      );
+      if (!mounted) return;
+
+      if (widget.isEditing) {
+        final orderRepo = context.read<OrderRepository>();
+        final o = await orderRepo.findById(widget.id!);
+        if (o != null) _order = o;
+      } else {
+        _order = Order(
+          id: 0,
+          orderNumber: 'ORD-${DateTime.now().millisecondsSinceEpoch}',
+          clientId: _clients.isNotEmpty ? _clients.first.id : 0,
+          cargoIds: [],
+          routeIds: [],
+          cargoDescription: '',
+          weight: 0.0,
+          volume: 0.0,
+          shippingDate: DateTime.now(),
+          status: 'in_transit',
+        );
+      }
+    } catch (e) {
+      // Не пробрасываем: показываем форму с пустыми справочниками.
+      debugPrint('Ошибка загрузки справочников: $e');
+    } finally {
+      // Гарантированно снимаем индикатор, даже при ошибке.
+      if (mounted) setState(() => _isLoading = false);
     }
-    if (mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _save(Map<String, dynamic> values) async {
-    final repo = context.read<PersistentOrderRepository>();
+    final repo = context.read<OrderRepository>();
 
     final order = Order(
       id: _order?.id ?? 0,
@@ -88,6 +105,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
       await repo.create(order);
     }
 
+    if (!mounted) return;
     final notifier = context.read<OrderListNotifier>();
     await notifier.load();
 

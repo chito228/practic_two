@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import '../repositories/persistent_route_repository.dart';
+import '../repositories/route_repository.dart';
 import '../models/route.dart' as model;
 import 'load_status.dart';
-import 'page_result.dart';
 
 class RouteListNotifier extends ChangeNotifier {
-  final PersistentRouteRepository _repository;
+  final RouteRepository _repository;
+
   RouteListNotifier(this._repository);
 
   List<model.Route> _items = [];

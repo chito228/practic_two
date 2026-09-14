@@ -1,8 +1,9 @@
-import 'package:shared_preferences/shared_preferences.dart';
 import '../models/cargo.dart';
 import 'base_repository.dart';
+import 'cargo_repository.dart';
 
-class PersistentCargoRepository extends BaseRepository<Cargo> {
+class PersistentCargoRepository extends BaseRepository<Cargo>
+    implements CargoRepository {
   PersistentCargoRepository(super.prefs, super.key);
 
   @override
@@ -55,12 +56,19 @@ class PersistentCargoRepository extends BaseRepository<Cargo> {
   }
 
   @override
-  Cargo _softDeleteItem(Cargo item) {
+  Cargo softDeleteItem(Cargo item) {
     return item.copyWith(deletedAt: DateTime.now());
   }
 
   @override
-  Cargo _restoreItem(Cargo item) {
+  Cargo restoreItem(Cargo item) {
     return item.copyWith(clearDeletedAt: true);
+  }
+
+  @override
+  Future<List<Cargo>> findAll({bool includeDeleted = false}) async {
+    await Future.delayed(const Duration(milliseconds: 50));
+    if (includeDeleted) return List.from(items);
+    return items.where((c) => !c.isDeleted).toList();
   }
 }

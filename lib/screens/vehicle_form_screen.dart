@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import '../core/reference_cache.dart';
 import '../models/vehicle.dart';
-import '../repositories/persistent_vehicle_repository.dart';
+import '../repositories/vehicle_repository.dart';
 import '../widgets/generic_form.dart';
 import '../state/vehicle_list_notifier.dart';
 
@@ -28,8 +29,9 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
 
   Future<void> _loadData() async {
     if (widget.isEditing) {
-      final repo = context.read<PersistentVehicleRepository>();
+      final repo = context.read<VehicleRepository>();
       final v = await repo.findById(widget.id!);
+      if (!mounted) return;
       if (v != null) _vehicle = v;
     } else {
       _vehicle = Vehicle(
@@ -45,7 +47,8 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
   }
 
   Future<void> _save(Map<String, dynamic> values) async {
-    final repo = context.read<PersistentVehicleRepository>();
+    final repo = context.read<VehicleRepository>();
+    final cache = context.read<ReferenceCache>();
 
     final vehicle = Vehicle(
       id: _vehicle?.id ?? 0,
@@ -62,6 +65,10 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
       await repo.create(vehicle);
     }
 
+    // Сбрасываем кэш справочника транспорта.
+    cache.invalidate('vehicles');
+
+    if (!mounted) return;
     final notifier = context.read<VehicleListNotifier>();
     await notifier.load();
 

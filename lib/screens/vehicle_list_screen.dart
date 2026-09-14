@@ -5,10 +5,12 @@ import '../state/vehicle_list_notifier.dart';
 import '../models/vehicle.dart';
 import '../widgets/entity_table.dart';
 import '../widgets/responsive_list.dart';
+import '../widgets/error_view.dart';
+import '../widgets/empty_view.dart';
 import '../utils/debounce.dart';
 import '../state/load_status.dart';
-import '../repositories/persistent_vehicle_repository.dart';
-import '../repositories/persistent_route_repository.dart';
+import '../repositories/vehicle_repository.dart';
+import '../repositories/route_repository.dart';
 
 class VehicleListScreen extends StatefulWidget {
   const VehicleListScreen({super.key});
@@ -65,10 +67,6 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
               onChanged: (value) {
                 _searchQuery = value;
                 _debouncer.call(() {
-                  final repo = context.read<PersistentVehicleRepository>();
-                  final items = repo.items.where((v) =>
-                      v.plateNumber.toLowerCase().contains(value.toLowerCase()) ||
-                      v.driverName.toLowerCase().contains(value.toLowerCase()));
                   setState(() {});
                 });
               },
@@ -87,21 +85,28 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
   }
 
   Widget _buildContent(VehicleListNotifier notifier) {
-    final filteredItems = _searchQuery.isEmpty
-        ? notifier.items
-        : notifier.items.where((v) =>
-            v.plateNumber.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-            v.driverName.toLowerCase().contains(_searchQuery.toLowerCase()))
-            .toList();
-
     switch (notifier.status) {
+      case LoadStatus.idle:
       case LoadStatus.loading:
         return const Center(child: CircularProgressIndicator());
+
       case LoadStatus.error:
-        return Center(child: Text('Ошибка: ${notifier.error}'));
+        return ErrorView(
+          message: notifier.error,
+          onRetry: () => notifier.load(),
+        );
+
       case LoadStatus.success:
+        final filteredItems = _searchQuery.isEmpty
+            ? notifier.items
+            : notifier.items
+                .where((v) =>
+                    v.plateNumber.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                    v.driverName.toLowerCase().contains(_searchQuery.toLowerCase()))
+                .toList();
+
         if (filteredItems.isEmpty) {
-          return const Center(child: Text('Нет транспорта'));
+          return const EmptyView(message: 'Нет транспорта');
         }
         return ResponsiveList<Vehicle>(
           items: filteredItems,
@@ -184,8 +189,6 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
             ],
           ),
         );
-      default:
-        return const SizedBox.shrink();
     }
   }
 
@@ -217,16 +220,18 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<PersistentVehicleRepository>(context, listen: false);
+      final repository = Provider.of<VehicleRepository>(context, listen: false);
       await repository.softDelete(id);
+      if (!context.mounted) return;
       final notifier = Provider.of<VehicleListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
-    final routeRepo = Provider.of<PersistentRouteRepository>(context, listen: false);
+    final routeRepo = Provider.of<RouteRepository>(context, listen: false);
     final routes = await routeRepo.findByVehicleId(id);
+    if (!context.mounted) return;
 
     if (routes.isNotEmpty) {
       await showDialog(
@@ -247,10 +252,7 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
               const SizedBox(height: 8),
               ...routes.map((route) => Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2.0),
-                child: Text(
-                  '• ${route.name}',
-                  style: const TextStyle(fontSize: 14),
-                ),
+                child: Text('• ${route.name}', style: const TextStyle(fontSize: 14)),
               )),
               const SizedBox(height: 12),
               Text(
@@ -299,15 +301,16 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<PersistentVehicleRepository>(context, listen: false);
+      final repository = Provider.of<VehicleRepository>(context, listen: false);
       await repository.hardDelete(id);
+      if (!context.mounted) return;
       final notifier = Provider.of<VehicleListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
 
   Future<void> _confirmDelete(BuildContext context, VehicleListNotifier notifier) async {
-    final routeRepo = Provider.of<PersistentRouteRepository>(context, listen: false);
+    final routeRepo = Provider.of<RouteRepository>(context, listen: false);
     final vehiclesWithRoutes = <int>[];
 
     for (final id in notifier.selected) {
@@ -316,6 +319,7 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
         vehiclesWithRoutes.add(id);
       }
     }
+    if (!context.mounted) return;
 
     if (vehiclesWithRoutes.isNotEmpty) {
       await showDialog(

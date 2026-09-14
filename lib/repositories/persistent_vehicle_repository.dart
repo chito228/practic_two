@@ -1,8 +1,9 @@
-import 'package:shared_preferences/shared_preferences.dart';
 import '../models/vehicle.dart';
 import 'base_repository.dart';
+import 'vehicle_repository.dart';
 
-class PersistentVehicleRepository extends BaseRepository<Vehicle> {
+class PersistentVehicleRepository extends BaseRepository<Vehicle>
+    implements VehicleRepository {
   PersistentVehicleRepository(super.prefs, super.key);
 
   @override
@@ -77,12 +78,19 @@ class PersistentVehicleRepository extends BaseRepository<Vehicle> {
   }
 
   @override
-  Vehicle _softDeleteItem(Vehicle item) {
+  Vehicle softDeleteItem(Vehicle item) {
     return item.copyWith(deletedAt: DateTime.now());
   }
 
   @override
-  Vehicle _restoreItem(Vehicle item) {
+  Vehicle restoreItem(Vehicle item) {
     return item.copyWith(clearDeletedAt: true);
+  }
+
+  @override
+  Future<List<Vehicle>> findAll({bool includeDeleted = false}) async {
+    await Future.delayed(const Duration(milliseconds: 50));
+    if (includeDeleted) return List.from(items);
+    return items.where((v) => !v.isDeleted).toList();
   }
 }
