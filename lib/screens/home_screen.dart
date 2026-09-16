@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../models/role.dart';
 import '../state/auth_notifier.dart';
+import '../widgets/main_scaffold.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -13,101 +13,50 @@ class HomeScreen extends StatelessWidget {
     final auth = context.watch<AuthNotifier>();
     final user = auth.user;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Главная'),
-            if (user != null)
-              Text(
-                '${user.fullName} — ${user.role.label}',
-                style: const TextStyle(fontSize: 12),
-              ),
-          ],
+    return MainScaffold(
+      title: 'Главная',
+      currentRoute: '/',
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.logout),
+          tooltip: 'Выйти',
+          onPressed: () async {
+            await context.read<AuthNotifier>().logout();
+            if (context.mounted) context.go('/login');
+          },
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Выйти',
-            onPressed: () async {
-              await context.read<AuthNotifier>().logout();
-              if (context.mounted) context.go('/login');
-            },
-          ),
-        ],
-      ),
+      ],
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 400),
+          constraints: const BoxConstraints(maxWidth: 480),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // ─── Диспетчерская — только для logist ───
-                if (auth.uiHasExactly(Role.logist)) ...[
-                  _buildMenuButton(
-                    context,
-                    'Диспетчерская',
-                    '/dispatch',
+                if (user != null) ...[
+                  Text(
+                    user.fullName,
+                    style: const TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 12),
-                ],
-
-                _buildMenuButton(context, 'Клиенты', '/clients'),
-                const SizedBox(height: 12),
-                _buildMenuButton(context, 'Заказы', '/orders'),
-                const SizedBox(height: 12),
-                _buildMenuButton(context, 'Грузы', '/cargo'),
-                const SizedBox(height: 12),
-                _buildMenuButton(context, 'Маршруты', '/routes'),
-                const SizedBox(height: 12),
-                _buildMenuButton(context, 'Транспорт', '/vehicles'),
-
-                // ─── Статистика — только для manager ───
-                if (auth.hasExactly(Role.manager)) ...[
-                  const SizedBox(height: 12),
-                  _buildMenuButton(
-                    context,
-                    'Статистика',
-                    '/stats',
+                  const SizedBox(height: 4),
+                  Text(
+                    user.role.label,
+                    style: TextStyle(
+                        fontSize: 14, color: Colors.grey.shade600),
+                    textAlign: TextAlign.center,
                   ),
+                  const SizedBox(height: 24),
                 ],
-
-                // ─── Пользователи — только для admin ───
-                if (auth.hasExactly(Role.admin)) ...[
-                  const SizedBox(height: 12),
-                  _buildMenuButton(
-                    context,
-                    'Пользователи',
-                    '/users',
-                  ),
-                ],
+                const Text(
+                  'Выберите раздел в меню',
+                  textAlign: TextAlign.center,
+                ),
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMenuButton(
-    BuildContext context,
-    String title,
-    String route,
-  ) {
-    return SizedBox(
-      width: double.infinity,
-      child: FilledButton(
-        onPressed: () => context.go(route),
-        style: FilledButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-        ),
-        child: Text(
-          title,
-          style: const TextStyle(fontSize: 16),
         ),
       ),
     );

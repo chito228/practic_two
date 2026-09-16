@@ -37,56 +37,60 @@ class CargoDetailScreen extends StatelessWidget {
           appBar: AppBar(title: Text(cargo.name)),
           body: Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _infoRow('ID', cargo.id.toString()),
-                _infoRow('Название', cargo.name),
-                if (cargo.description != null)
-                  _infoRow('Описание', cargo.description!),
-                _infoRow('Вес за единицу', '${cargo.weightPerUnit} кг'),
-                _infoRow('Объём за единицу', '${cargo.volumePerUnit} м³'),
-                _infoRow('Количество заказов', cargo.orderIds.length.toString()),
-                if (cargo.isDeleted)
-                  _infoRow('Статус', 'Скрыт', color: Colors.orange),
-                const Spacer(),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    ElevatedButton(
-                      onPressed: () => context.go('/cargo'),
-                      child: const Text('Назад'),
-                    ),
-
-                    // Редактирование груза — только admin.
-                    if (auth.uiHas(Role.admin))
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _infoRow('ID', cargo.id.toString()),
+                  _infoRow('Название', cargo.name),
+                  if (cargo.description != null)
+                    _infoRow('Описание', cargo.description!),
+                  _infoRow('Вес за единицу', '${cargo.weightPerUnit} кг'),
+                  _infoRow('Объём за единицу', '${cargo.volumePerUnit} м³'),
+                  _infoRow('Количество заказов', cargo.orderIds.length.toString()),
+                  if (cargo.isDeleted)
+                    _infoRow('Статус', 'Скрыт', color: Colors.orange),
+                  const SizedBox(height: 32),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    alignment: WrapAlignment.center,
+                    children: [
                       ElevatedButton(
-                        onPressed: () => context.go('/cargo/${cargo.id}/edit'),
-                        child: const Text('Редактировать'),
+                        onPressed: () => context.go('/cargo'),
+                        child: const Text('Назад'),
                       ),
 
-                    // Скрыть/удалить/восстановить — только admin.
-                    if (!cargo.isDeleted) ...[
+                      // Редактирование груза — только admin.
                       if (auth.uiHas(Role.admin))
                         ElevatedButton(
-                          onPressed: () => _softDelete(context, cargo.id),
-                          child: const Text('Скрыть'),
+                          onPressed: () => context.go('/cargo/${cargo.id}/edit'),
+                          child: const Text('Редактировать'),
                         ),
-                      if (auth.uiHas(Role.admin))
-                        ElevatedButton(
-                          onPressed: () => _hardDelete(context, cargo.id),
-                          child: const Text('Удалить'),
-                        ),
-                    ] else ...[
-                      if (auth.uiHas(Role.admin))
-                        ElevatedButton(
-                          onPressed: () => _restore(context, cargo.id),
-                          child: const Text('Восстановить'),
-                        ),
+
+                      // Скрыть/удалить/восстановить — только admin.
+                      if (!cargo.isDeleted) ...[
+                        if (auth.uiHas(Role.admin))
+                          ElevatedButton(
+                            onPressed: () => _softDelete(context, cargo.id),
+                            child: const Text('Скрыть'),
+                          ),
+                        if (auth.uiHas(Role.admin))
+                          ElevatedButton(
+                            onPressed: () => _hardDelete(context, cargo.id),
+                            child: const Text('Удалить'),
+                          ),
+                      ] else ...[
+                        if (auth.uiHas(Role.admin))
+                          ElevatedButton(
+                            onPressed: () => _restore(context, cargo.id),
+                            child: const Text('Восстановить'),
+                          ),
+                      ],
                     ],
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -105,9 +109,18 @@ class CargoDetailScreen extends StatelessWidget {
             child: Text(
               '$label:',
               style: const TextStyle(fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ),
-          Expanded(child: Text(value, style: TextStyle(color: color))),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(color: color),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 3,
+            ),
+          ),
         ],
       ),
     );

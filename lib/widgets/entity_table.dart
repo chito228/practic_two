@@ -42,58 +42,67 @@ class EntityTable<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     int? sortColumnIndex;
     if (sortField != null) {
-      sortColumnIndex = columns.indexWhere((col) => col.sortField == sortField);
+      sortColumnIndex =
+          columns.indexWhere((col) => col.sortField == sortField);
       if (sortColumnIndex == -1) sortColumnIndex = null;
     }
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        sortColumnIndex: sortColumnIndex,
-        sortAscending: sortAscending,
-        columns: [
-          if (onToggleSelect != null)
-            const DataColumn(
-              label: SizedBox(width: 40, child: Text('')),
-            ),
-          ...columns.map((col) {
-            return DataColumn(
-              label: Text(col.label),
-              numeric: col.numeric,
-              onSort: col.sortField != null && onSort != null
-                  ? (_, _) => onSort!(col.sortField!)
-                  : null,
-            );
-          }),
-          if (actions != null)
-            const DataColumn(
-              label: SizedBox(width: 80, child: Text('Действия')),
-            ),
-        ],
-        rows: items.map((item) {
-          final id = idOf(item);
-          final isSelected = selected.contains(id);
-          return DataRow(
-            selected: isSelected,
-            cells: [
+    return Scrollbar(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.vertical,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: DataTable(
+            sortColumnIndex: sortColumnIndex,
+            sortAscending: sortAscending,
+            columns: [
               if (onToggleSelect != null)
-                DataCell(
-                  Checkbox(
-                    value: isSelected,
-                    onChanged: (_) => onToggleSelect!(id),
-                  ),
+                const DataColumn(
+                  label: SizedBox(width: 40, child: Text('')),
                 ),
-              ...columns.map((col) => DataCell(col.build(item))),
-              if (actions != null)
-                DataCell(
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: actions!(item),
+              ...columns.map((col) {
+                return DataColumn(
+                  label: Text(
+                    col.label,
+                    overflow: TextOverflow.ellipsis,
                   ),
+                  numeric: col.numeric,
+                  onSort: col.sortField != null && onSort != null
+                      ? (_, _) => onSort!(col.sortField!)
+                      : null,
+                );
+              }),
+              if (actions != null)
+                const DataColumn(
+                  label: SizedBox(width: 80, child: Text('Действия')),
                 ),
             ],
-          );
-        }).toList(),
+            rows: items.map((item) {
+              final id = idOf(item);
+              final isSelected = selected.contains(id);
+              return DataRow(
+                selected: isSelected,
+                cells: [
+                  if (onToggleSelect != null)
+                    DataCell(
+                      Checkbox(
+                        value: isSelected,
+                        onChanged: (_) => onToggleSelect!(id),
+                      ),
+                    ),
+                  ...columns.map((col) => DataCell(col.build(item))),
+                  if (actions != null)
+                    DataCell(
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: actions!(item),
+                      ),
+                    ),
+                ],
+              );
+            }).toList(),
+          ),
+        ),
       ),
     );
   }

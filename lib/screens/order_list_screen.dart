@@ -10,6 +10,7 @@ import '../widgets/entity_table.dart';
 import '../widgets/responsive_list.dart';
 import '../widgets/error_view.dart';
 import '../widgets/empty_view.dart';
+import '../widgets/main_scaffold.dart';
 import '../utils/debounce.dart';
 import '../state/load_status.dart';
 import '../state/order_query.dart';
@@ -41,8 +42,6 @@ class _OrderListScreenState extends State<OrderListScreen> {
       final cache = context.read<ReferenceCache>();
       final clientRepo = context.read<ClientRepository>();
 
-      // Используем общий кэш: если клиенты уже загружены —
-      // запрос к серверу не уйдёт.
       final clients = await cache.load('clients', () => clientRepo.findAll());
 
       if (!mounted) return;
@@ -65,32 +64,42 @@ class _OrderListScreenState extends State<OrderListScreen> {
     final notifier = Provider.of<OrderListNotifier>(context);
     final auth = context.watch<AuthNotifier>();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Заказы'),
-        actions: [
-          if (notifier.hasSelection)
-            Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: Center(
-                child: Text(
-                  'Выбрано: ${notifier.selected.length}',
-                  style: const TextStyle(fontSize: 14),
-                ),
+    return MainScaffold(
+      title: 'Заказы',
+      currentRoute: '/orders',
+      actions: [
+        if (notifier.hasSelection)
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: Center(
+              child: Text(
+                'Выбрано: ${notifier.selected.length}',
+                style: const TextStyle(fontSize: 14),
               ),
             ),
-          if (notifier.hasSelection)
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              onPressed: () => _confirmDelete(context, notifier),
-            ),
-        ],
-      ),
+          ),
+        if (notifier.hasSelection)
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Удалить выбранные',
+            onPressed: () => _confirmDelete(context, notifier),
+          ),
+      ],
+      floatingActionButton: auth.uiHas(Role.logist)
+          ? FloatingActionButton(
+              onPressed: () => context.go('/orders/create'),
+              tooltip: 'Создать заказ',
+              child: const Icon(Icons.add),
+            )
+          : null,
       body: Column(
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Row(
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 const Text('Показать удалённые'),
                 Switch(
@@ -134,9 +143,12 @@ class _OrderListScreenState extends State<OrderListScreen> {
               ),
               items: [
                 const DropdownMenuItem(value: null, child: Text('Все статусы')),
-                const DropdownMenuItem(value: 'in_transit', child: Text('В пути')),
-                const DropdownMenuItem(value: 'delivered', child: Text('Доставлено')),
-                const DropdownMenuItem(value: 'cancelled', child: Text('Отменено')),
+                const DropdownMenuItem(
+                    value: 'in_transit', child: Text('В пути')),
+                const DropdownMenuItem(
+                    value: 'delivered', child: Text('Доставлено')),
+                const DropdownMenuItem(
+                    value: 'cancelled', child: Text('Отменено')),
               ],
               onChanged: (value) {
                 notifier.applyQuery(
@@ -147,7 +159,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
           ),
           if (notifier.query.hasFilters)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
               child: Wrap(
                 spacing: 8,
                 children: [
@@ -155,15 +168,18 @@ class _OrderListScreenState extends State<OrderListScreen> {
                     ActionChip(
                       label: Text('Поиск: ${notifier.query.search}'),
                       onPressed: () {
-                        final newQuery = notifier.query.copyWith(search: '', page: 1);
+                        final newQuery =
+                            notifier.query.copyWith(search: '', page: 1);
                         notifier.applyQuery(newQuery);
                       },
                     ),
                   if (notifier.query.status != null)
                     ActionChip(
-                      label: Text('Статус: ${_getStatusText(notifier.query.status!)}'),
+                      label: Text(
+                          'Статус: ${_getStatusText(notifier.query.status!)}'),
                       onPressed: () {
-                        final newQuery = notifier.query.copyWith(status: null, page: 1);
+                        final newQuery =
+                            notifier.query.copyWith(status: null, page: 1);
                         notifier.applyQuery(newQuery);
                       },
                     ),
@@ -171,7 +187,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
                     ActionChip(
                       label: const Text('Показаны удалённые'),
                       onPressed: () {
-                        final newQuery = notifier.query.copyWith(includeDeleted: false, page: 1);
+                        final newQuery = notifier.query
+                            .copyWith(includeDeleted: false, page: 1);
                         notifier.applyQuery(newQuery);
                       },
                     ),
@@ -188,7 +205,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
           Expanded(
             child: _buildContent(notifier, auth),
           ),
-          if (notifier.status == LoadStatus.success && notifier.result.total > 0)
+          if (notifier.status == LoadStatus.success &&
+              notifier.result.total > 0)
             Padding(
               padding: const EdgeInsets.only(bottom: 80.0),
               child: PaginationControls(
@@ -210,21 +228,19 @@ class _OrderListScreenState extends State<OrderListScreen> {
             ),
         ],
       ),
-      floatingActionButton: auth.uiHas(Role.logist)
-          ? FloatingActionButton(
-              onPressed: () => context.go('/orders/create'),
-              child: const Icon(Icons.add),
-            )
-          : null,
     );
   }
 
   String _getStatusText(String status) {
     switch (status) {
-      case 'in_transit': return 'В пути';
-      case 'delivered': return 'Доставлено';
-      case 'cancelled': return 'Отменено';
-      default: return status;
+      case 'in_transit':
+        return 'В пути';
+      case 'delivered':
+        return 'Доставлено';
+      case 'cancelled':
+        return 'Отменено';
+      default:
+        return status;
     }
   }
 
@@ -249,11 +265,21 @@ class _OrderListScreenState extends State<OrderListScreen> {
           cardBuilder: (order) => Card(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: ListTile(
-              title: Text(order.orderNumber),
+              title: Text(
+                order.orderNumber,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
               subtitle: Text(
                 '${order.cargoDescription} | ${_clientNames[order.clientId] ?? 'Клиент ${order.clientId}'}',
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
               ),
-              trailing: Text(_getStatusText(order.status)),
+              trailing: Text(
+                _getStatusText(order.status),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
               onTap: () => context.go('/orders/${order.id}'),
             ),
           ),
@@ -281,7 +307,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
               ),
               TableColumnSpec<Order>(
                 label: 'Клиент',
-                build: (o) => Text(_clientNames[o.clientId] ?? 'ID: ${o.clientId}'),
+                build: (o) =>
+                    Text(_clientNames[o.clientId] ?? 'ID: ${o.clientId}'),
               ),
               TableColumnSpec<Order>(
                 label: 'Описание груза',
@@ -347,7 +374,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Скрыть заказ?'),
-        content: const Text('Заказ будет скрыт, но не удалён. Его можно будет восстановить.'),
+        content: const Text(
+            'Заказ будет скрыт, но не удалён. Его можно будет восстановить.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -361,10 +389,12 @@ class _OrderListScreenState extends State<OrderListScreen> {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<OrderRepository>(context, listen: false);
+      final repository =
+          Provider.of<OrderRepository>(context, listen: false);
       await repository.softDelete(id);
       if (!context.mounted) return;
-      final notifier = Provider.of<OrderListNotifier>(context, listen: false);
+      final notifier =
+          Provider.of<OrderListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
@@ -423,13 +453,15 @@ class _OrderListScreenState extends State<OrderListScreen> {
               ),
               const SizedBox(height: 8),
               ...related.map((item) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2.0),
-                child: Text(item, style: const TextStyle(fontSize: 14)),
-              )),
+                    padding: const EdgeInsets.symmetric(vertical: 2.0),
+                    child:
+                        Text(item, style: const TextStyle(fontSize: 14)),
+                  )),
               const SizedBox(height: 12),
               Text(
                 'Количество связанных записей: ${related.length}',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                style:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -467,28 +499,34 @@ class _OrderListScreenState extends State<OrderListScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить навсегда', style: TextStyle(fontSize: 14, color: Colors.red)),
+            child: const Text('Удалить навсегда',
+                style: TextStyle(fontSize: 14, color: Colors.red)),
           ),
         ],
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<OrderRepository>(context, listen: false);
+      final repository =
+          Provider.of<OrderRepository>(context, listen: false);
       await repository.hardDelete(id);
       if (!context.mounted) return;
-      final notifier = Provider.of<OrderListNotifier>(context, listen: false);
+      final notifier =
+          Provider.of<OrderListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
 
-  Future<void> _confirmDelete(BuildContext context, OrderListNotifier notifier) async {
+  Future<void> _confirmDelete(
+      BuildContext context, OrderListNotifier notifier) async {
     final orderRepo = Provider.of<OrderRepository>(context, listen: false);
     final ordersWithRelations = <int>[];
 
     for (final id in notifier.selected) {
       final order = await orderRepo.findById(id);
       if (order == null) continue;
-      if (order.clientId > 0 || order.cargoIds.isNotEmpty || order.routeIds.isNotEmpty) {
+      if (order.clientId > 0 ||
+          order.cargoIds.isNotEmpty ||
+          order.routeIds.isNotEmpty) {
         ordersWithRelations.add(id);
       }
     }
@@ -522,7 +560,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Подтверждение удаления'),
-        content: Text('Вы уверены, что хотите удалить ${notifier.selected.length} заказов?'),
+        content: Text(
+            'Вы уверены, что хотите удалить ${notifier.selected.length} заказов?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

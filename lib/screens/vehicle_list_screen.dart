@@ -9,6 +9,7 @@ import '../widgets/entity_table.dart';
 import '../widgets/responsive_list.dart';
 import '../widgets/error_view.dart';
 import '../widgets/empty_view.dart';
+import '../widgets/main_scaffold.dart';
 import '../utils/debounce.dart';
 import '../state/load_status.dart';
 import '../repositories/vehicle_repository.dart';
@@ -36,27 +37,34 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
     final notifier = Provider.of<VehicleListNotifier>(context);
     final auth = context.watch<AuthNotifier>();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Транспорт'),
-        actions: [
-          if (notifier.hasSelection)
-            Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: Center(
-                child: Text(
-                  'Выбрано: ${notifier.selected.length}',
-                  style: const TextStyle(fontSize: 14),
-                ),
+    return MainScaffold(
+      title: 'Транспорт',
+      currentRoute: '/vehicles',
+      actions: [
+        if (notifier.hasSelection)
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: Center(
+              child: Text(
+                'Выбрано: ${notifier.selected.length}',
+                style: const TextStyle(fontSize: 14),
               ),
             ),
-          if (notifier.hasSelection && auth.uiHas(Role.admin))
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              onPressed: () => _confirmDelete(context, notifier),
-            ),
-        ],
-      ),
+          ),
+        if (notifier.hasSelection && auth.uiHas(Role.admin))
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Удалить выбранные',
+            onPressed: () => _confirmDelete(context, notifier),
+          ),
+      ],
+      floatingActionButton: auth.uiHas(Role.admin)
+          ? FloatingActionButton(
+              onPressed: () => context.go('/vehicles/create'),
+              tooltip: 'Создать транспорт',
+              child: const Icon(Icons.add),
+            )
+          : null,
       body: Column(
         children: [
           Padding(
@@ -80,12 +88,6 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
           ),
         ],
       ),
-      floatingActionButton: auth.uiHas(Role.admin)
-          ? FloatingActionButton(
-              onPressed: () => context.go('/vehicles/create'),
-              child: const Icon(Icons.add),
-            )
-          : null,
     );
   }
 
@@ -106,8 +108,12 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
             ? notifier.items
             : notifier.items
                 .where((v) =>
-                    v.plateNumber.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-                    v.driverName.toLowerCase().contains(_searchQuery.toLowerCase()))
+                    v.plateNumber
+                        .toLowerCase()
+                        .contains(_searchQuery.toLowerCase()) ||
+                    v.driverName
+                        .toLowerCase()
+                        .contains(_searchQuery.toLowerCase()))
                 .toList();
 
         if (filteredItems.isEmpty) {
@@ -118,9 +124,21 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
           cardBuilder: (vehicle) => Card(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: ListTile(
-              title: Text(vehicle.plateNumber),
-              subtitle: Text(vehicle.driverName),
-              trailing: Text('${vehicle.capacity} т'),
+              title: Text(
+                vehicle.plateNumber,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              subtitle: Text(
+                vehicle.driverName,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              trailing: Text(
+                '${vehicle.capacity} т',
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
               onTap: () => context.go('/vehicles/${vehicle.id}'),
             ),
           ),
@@ -128,7 +146,8 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
             items: items,
             idOf: (v) => v.id,
             selected: notifier.selected,
-            onToggleSelect: auth.uiHas(Role.admin) ? notifier.toggleSelection : null,
+            onToggleSelect:
+                auth.uiHas(Role.admin) ? notifier.toggleSelection : null,
             sortField: 'plateNumber',
             sortAscending: true,
             columns: [
@@ -202,10 +221,14 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
 
   String _getStatusText(String status) {
     switch (status) {
-      case 'active': return 'В работе';
-      case 'maintenance': return 'На обслуживании';
-      case 'repair': return 'В ремонте';
-      default: return status;
+      case 'active':
+        return 'В работе';
+      case 'maintenance':
+        return 'На обслуживании';
+      case 'repair':
+        return 'В ремонте';
+      default:
+        return status;
     }
   }
 
@@ -214,7 +237,8 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Скрыть транспорт?'),
-        content: const Text('Транспорт будет скрыт, но не удалён. Его можно будет восстановить.'),
+        content: const Text(
+            'Транспорт будет скрыт, но не удалён. Его можно будет восстановить.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -228,10 +252,12 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<VehicleRepository>(context, listen: false);
+      final repository =
+          Provider.of<VehicleRepository>(context, listen: false);
       await repository.softDelete(id);
       if (!context.mounted) return;
-      final notifier = Provider.of<VehicleListNotifier>(context, listen: false);
+      final notifier =
+          Provider.of<VehicleListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
@@ -259,13 +285,15 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
               ),
               const SizedBox(height: 8),
               ...routes.map((route) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2.0),
-                child: Text('• ${route.name}', style: const TextStyle(fontSize: 14)),
-              )),
+                    padding: const EdgeInsets.symmetric(vertical: 2.0),
+                    child: Text('• ${route.name}',
+                        style: const TextStyle(fontSize: 14)),
+                  )),
               const SizedBox(height: 12),
               Text(
                 'Количество маршрутов: ${routes.length}',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                style:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -303,21 +331,25 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить навсегда', style: TextStyle(fontSize: 14, color: Colors.red)),
+            child: const Text('Удалить навсегда',
+                style: TextStyle(fontSize: 14, color: Colors.red)),
           ),
         ],
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<VehicleRepository>(context, listen: false);
+      final repository =
+          Provider.of<VehicleRepository>(context, listen: false);
       await repository.hardDelete(id);
       if (!context.mounted) return;
-      final notifier = Provider.of<VehicleListNotifier>(context, listen: false);
+      final notifier =
+          Provider.of<VehicleListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
 
-  Future<void> _confirmDelete(BuildContext context, VehicleListNotifier notifier) async {
+  Future<void> _confirmDelete(
+      BuildContext context, VehicleListNotifier notifier) async {
     final routeRepo = Provider.of<RouteRepository>(context, listen: false);
     final vehiclesWithRoutes = <int>[];
 
@@ -357,7 +389,8 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Подтверждение удаления'),
-        content: Text('Вы уверены, что хотите удалить ${notifier.selected.length} единиц транспорта?'),
+        content: Text(
+            'Вы уверены, что хотите удалить ${notifier.selected.length} единиц транспорта?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

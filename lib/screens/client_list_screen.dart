@@ -9,6 +9,7 @@ import '../widgets/entity_table.dart';
 import '../widgets/responsive_list.dart';
 import '../widgets/error_view.dart';
 import '../widgets/empty_view.dart';
+import '../widgets/main_scaffold.dart';
 import '../utils/debounce.dart';
 import '../state/load_status.dart';
 import '../state/client_query.dart';
@@ -37,32 +38,42 @@ class _ClientListScreenState extends State<ClientListScreen> {
     final notifier = Provider.of<ClientListNotifier>(context);
     final auth = context.watch<AuthNotifier>();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Клиенты'),
-        actions: [
-          if (notifier.hasSelection)
-            Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: Center(
-                child: Text(
-                  'Выбрано: ${notifier.selected.length}',
-                  style: const TextStyle(fontSize: 14),
-                ),
+    return MainScaffold(
+      title: 'Клиенты',
+      currentRoute: '/clients',
+      actions: [
+        if (notifier.hasSelection)
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: Center(
+              child: Text(
+                'Выбрано: ${notifier.selected.length}',
+                style: const TextStyle(fontSize: 14),
               ),
             ),
-          if (notifier.hasSelection)
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              onPressed: () => _confirmDelete(context, notifier),
-            ),
-        ],
-      ),
+          ),
+        if (notifier.hasSelection)
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Удалить выбранные',
+            onPressed: () => _confirmDelete(context, notifier),
+          ),
+      ],
+      floatingActionButton: auth.uiHas(Role.logist)
+          ? FloatingActionButton(
+              onPressed: () => context.go('/clients/create'),
+              tooltip: 'Создать клиента',
+              child: const Icon(Icons.add),
+            )
+          : null,
       body: Column(
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Row(
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 const Text('Показать удалённые'),
                 Switch(
@@ -98,7 +109,8 @@ class _ClientListScreenState extends State<ClientListScreen> {
           ),
           if (notifier.query.hasFilters)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
               child: Wrap(
                 spacing: 8,
                 children: [
@@ -106,7 +118,8 @@ class _ClientListScreenState extends State<ClientListScreen> {
                     ActionChip(
                       label: Text('Поиск: ${notifier.query.search}'),
                       onPressed: () {
-                        final newQuery = notifier.query.copyWith(search: '', page: 1);
+                        final newQuery =
+                            notifier.query.copyWith(search: '', page: 1);
                         notifier.applyQuery(newQuery);
                       },
                     ),
@@ -114,7 +127,8 @@ class _ClientListScreenState extends State<ClientListScreen> {
                     ActionChip(
                       label: const Text('Показаны удалённые'),
                       onPressed: () {
-                        final newQuery = notifier.query.copyWith(includeDeleted: false, page: 1);
+                        final newQuery = notifier.query
+                            .copyWith(includeDeleted: false, page: 1);
                         notifier.applyQuery(newQuery);
                       },
                     ),
@@ -131,7 +145,8 @@ class _ClientListScreenState extends State<ClientListScreen> {
           Expanded(
             child: _buildContent(notifier, auth),
           ),
-          if (notifier.status == LoadStatus.success && notifier.result.total > 0)
+          if (notifier.status == LoadStatus.success &&
+              notifier.result.total > 0)
             Padding(
               padding: const EdgeInsets.only(bottom: 80.0),
               child: PaginationControls(
@@ -153,12 +168,6 @@ class _ClientListScreenState extends State<ClientListScreen> {
             ),
         ],
       ),
-      floatingActionButton: auth.uiHas(Role.logist)
-          ? FloatingActionButton(
-              onPressed: () => context.go('/clients/create'),
-              child: const Icon(Icons.add),
-            )
-          : null,
     );
   }
 
@@ -183,9 +192,21 @@ class _ClientListScreenState extends State<ClientListScreen> {
           cardBuilder: (client) => Card(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: ListTile(
-              title: Text(client.companyName),
-              subtitle: Text(client.contactPerson),
-              trailing: Text(client.phone),
+              title: Text(
+                client.companyName,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              subtitle: Text(
+                client.contactPerson,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              trailing: Text(
+                client.phone,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
               onTap: () => context.go('/clients/${client.id}'),
             ),
           ),
@@ -270,7 +291,8 @@ class _ClientListScreenState extends State<ClientListScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Скрыть клиента?'),
-        content: const Text('Клиент будет скрыт, но не удалён. Его можно будет восстановить.'),
+        content: const Text(
+            'Клиент будет скрыт, но не удалён. Его можно будет восстановить.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -284,10 +306,12 @@ class _ClientListScreenState extends State<ClientListScreen> {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<ClientRepository>(context, listen: false);
+      final repository =
+          Provider.of<ClientRepository>(context, listen: false);
       await repository.softDelete(id);
       if (!context.mounted) return;
-      final notifier = Provider.of<ClientListNotifier>(context, listen: false);
+      final notifier =
+          Provider.of<ClientListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
@@ -315,16 +339,17 @@ class _ClientListScreenState extends State<ClientListScreen> {
               ),
               const SizedBox(height: 8),
               ...orders.map((order) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2.0),
-                child: Text(
-                  '• Заказ #${order.orderNumber} (${order.cargoDescription})',
-                  style: const TextStyle(fontSize: 14),
-                ),
-              )),
+                    padding: const EdgeInsets.symmetric(vertical: 2.0),
+                    child: Text(
+                      '• Заказ #${order.orderNumber} (${order.cargoDescription})',
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  )),
               const SizedBox(height: 12),
               Text(
                 'Количество заказов: ${orders.length}',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                style:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -363,17 +388,20 @@ class _ClientListScreenState extends State<ClientListScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить навсегда', style: TextStyle(fontSize: 14, color: Colors.red)),
+            child: const Text('Удалить навсегда',
+                style: TextStyle(fontSize: 14, color: Colors.red)),
           ),
         ],
       ),
     );
 
     if (confirmed == true) {
-      final repository = Provider.of<ClientRepository>(context, listen: false);
+      final repository =
+          Provider.of<ClientRepository>(context, listen: false);
       await repository.hardDelete(id);
       if (!context.mounted) return;
-      final notifier = Provider.of<ClientListNotifier>(context, listen: false);
+      final notifier =
+          Provider.of<ClientListNotifier>(context, listen: false);
       await notifier.load();
 
       if (context.mounted) {
@@ -387,7 +415,8 @@ class _ClientListScreenState extends State<ClientListScreen> {
     }
   }
 
-  Future<void> _confirmDelete(BuildContext context, ClientListNotifier notifier) async {
+  Future<void> _confirmDelete(
+      BuildContext context, ClientListNotifier notifier) async {
     final orderRepo = Provider.of<OrderRepository>(context, listen: false);
     final clientsWithOrders = <int>[];
 
@@ -427,7 +456,8 @@ class _ClientListScreenState extends State<ClientListScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Подтверждение удаления'),
-        content: Text('Вы уверены, что хотите удалить ${notifier.selected.length} клиентов?'),
+        content: Text(
+            'Вы уверены, что хотите удалить ${notifier.selected.length} клиентов?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

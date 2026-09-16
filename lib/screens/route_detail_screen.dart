@@ -52,69 +52,73 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               appBar: AppBar(title: Text(route.name)),
               body: Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _infoRow('ID', route.id.toString()),
-                    _infoRow('Название', route.name),
-                    _infoRow('Откуда', route.origin),
-                    _infoRow('Куда', route.destination),
-                    _infoRow('Расстояние', '${route.distance} км'),
-                    _infoRow(
-                      'Транспорт',
-                      _vehicle != null
-                          ? '${_vehicle!.plateNumber} (${_vehicle!.driverName})'
-                          : 'ID: ${route.vehicleId}',
-                    ),
-                    _infoRow('Расчётное время', '${route.estimatedTime} ч'),
-                    _infoRow('Статус', _getStatusText(route.status)),
-                    _infoRow(
-                      'Количество заказов',
-                      route.orderIds.length.toString(),
-                    ),
-                    if (route.isDeleted)
-                      _infoRow('Статус', 'Скрыт', color: Colors.orange),
-                    const Spacer(),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        ElevatedButton(
-                          onPressed: () => context.go('/routes'),
-                          child: const Text('Назад'),
-                        ),
-
-                        // Редактирование маршрута — logist и выше.
-                        if (auth.uiHas(Role.logist))
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _infoRow('ID', route.id.toString()),
+                      _infoRow('Название', route.name),
+                      _infoRow('Откуда', route.origin),
+                      _infoRow('Куда', route.destination),
+                      _infoRow('Расстояние', '${route.distance} км'),
+                      _infoRow(
+                        'Транспорт',
+                        _vehicle != null
+                            ? '${_vehicle!.plateNumber} (${_vehicle!.driverName})'
+                            : 'ID: ${route.vehicleId}',
+                      ),
+                      _infoRow('Расчётное время', '${route.estimatedTime} ч'),
+                      _infoRow('Статус', _getStatusText(route.status)),
+                      _infoRow(
+                        'Количество заказов',
+                        route.orderIds.length.toString(),
+                      ),
+                      if (route.isDeleted)
+                        _infoRow('Статус', 'Скрыт', color: Colors.orange),
+                      const SizedBox(height: 32),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        alignment: WrapAlignment.center,
+                        children: [
                           ElevatedButton(
-                            onPressed: () =>
-                                context.go('/routes/${route.id}/edit'),
-                            child: const Text('Редактировать'),
+                            onPressed: () => context.go('/routes'),
+                            child: const Text('Назад'),
                           ),
 
-                        // Скрыть — logist и выше.
-                        if (!route.isDeleted) ...[
+                          // Редактирование маршрута — logist и выше.
                           if (auth.uiHas(Role.logist))
                             ElevatedButton(
-                              onPressed: () => _softDelete(context, route.id),
-                              child: const Text('Скрыть'),
+                              onPressed: () =>
+                                  context.go('/routes/${route.id}/edit'),
+                              child: const Text('Редактировать'),
                             ),
-                          // Удалить навсегда — только admin.
-                          if (auth.uiHas(Role.admin))
-                            ElevatedButton(
-                              onPressed: () => _hardDelete(context, route.id),
-                              child: const Text('Удалить'),
-                            ),
-                        ] else ...[
-                          // Восстановление — только admin.
-                          if (auth.uiHas(Role.admin))
-                            ElevatedButton(
-                              onPressed: () => _restore(context, route.id),
-                              child: const Text('Восстановить'),
-                            ),
+
+                          // Скрыть — logist и выше.
+                          if (!route.isDeleted) ...[
+                            if (auth.uiHas(Role.logist))
+                              ElevatedButton(
+                                onPressed: () => _softDelete(context, route.id),
+                                child: const Text('Скрыть'),
+                              ),
+                            // Удалить навсегда — только admin.
+                            if (auth.uiHas(Role.admin))
+                              ElevatedButton(
+                                onPressed: () => _hardDelete(context, route.id),
+                                child: const Text('Удалить'),
+                              ),
+                          ] else ...[
+                            // Восстановление — только admin.
+                            if (auth.uiHas(Role.admin))
+                              ElevatedButton(
+                                onPressed: () => _restore(context, route.id),
+                                child: const Text('Восстановить'),
+                              ),
+                          ],
                         ],
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -148,9 +152,18 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
             child: Text(
               '$label:',
               style: const TextStyle(fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ),
-          Expanded(child: Text(value, style: TextStyle(color: color))),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(color: color),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 3,
+            ),
+          ),
         ],
       ),
     );

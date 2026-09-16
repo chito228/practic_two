@@ -11,21 +11,18 @@ import 'core/auth_api.dart';
 import 'core/reference_cache.dart';
 import 'router.dart';
 
-// Интерфейсы репозиториев
 import 'repositories/client_repository.dart';
 import 'repositories/cargo_repository.dart';
 import 'repositories/order_repository.dart';
 import 'repositories/route_repository.dart';
 import 'repositories/vehicle_repository.dart';
 
-// Api-реализации
 import 'repositories/api/api_client_repository.dart';
 import 'repositories/api/api_cargo_repository.dart';
 import 'repositories/api/api_order_repository.dart';
 import 'repositories/api/api_route_repository.dart';
 import 'repositories/api/api_vehicle_repository.dart';
 
-// Нотифаеры
 import 'state/auth_notifier.dart';
 import 'state/client_list_notifier.dart';
 import 'state/order_list_notifier.dart';
@@ -33,7 +30,6 @@ import 'state/cargo_list_notifier.dart';
 import 'state/route_list_notifier.dart';
 import 'state/vehicle_list_notifier.dart';
 
-// Виджеты
 import 'widgets/inactivity_watcher.dart';
 
 Future<void> main() async {
@@ -108,21 +104,43 @@ Future<void> main() async {
           )..load(),
         ),
       ],
-      // ИЗМЕНЕНИЕ: _AppWrapper убран отсюда. Теперь здесь только MyApp.
       child: const MyApp(),
     ),
   );
 }
 
-/// Обёртка над приложением:
-/// - InactivityWatcher — выход по неактивности (30 мин + предупреждение 30 сек).
-/// - Таймер общей длительности сессии (по умолчанию 60 минут).
-/// - Диалог предупреждения о скором истечении сессии (за 60 секунд до конца).
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp.router(
+      title: 'Логистика',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.indigo,
+          brightness: Brightness.light,
+        ),
+        useMaterial3: true,
+      ),
+      routerConfig: appRouter,
+      builder: (context, child) {
+        // ВАЖНО: builder получает context уже ПОД MaterialApp,
+        // то есть Navigator доступен. _AppWrapper окажется
+        // внутри Navigator и showDialog сработает.
+        return _AppWrapper(
+          authNotifier: context.read<AuthNotifier>(),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
+    );
+  }
+}
+
 class _AppWrapper extends StatefulWidget {
   final AuthNotifier authNotifier;
   final Widget child;
-
-  /// За сколько до истечения сессии показывать предупреждение.
   final Duration warningBefore;
 
   const _AppWrapper({
@@ -162,7 +180,6 @@ class _AppWrapperState extends State<_AppWrapper> {
       if (_sessionTimer == null || !_sessionTimer!.isActive) {
         _startSessionTimer();
       }
-      // Если пользователь продлил сессию — сбросить флаг предупреждения.
       final left = widget.authNotifier.sessionTimeLeft;
       if (left != null && left > widget.warningBefore) {
         _warningShown = false;
@@ -170,10 +187,6 @@ class _AppWrapperState extends State<_AppWrapper> {
     }
   }
 
-  /// Запускает периодический таймер. Каждые 15 секунд:
-  /// - если сессия истекла — выход;
-  /// - если осталось меньше warningBefore и предупреждение
-  ///   ещё не показывали — показать диалог.
   void _startSessionTimer() {
     _sessionTimer?.cancel();
     _warningShown = false;
@@ -188,28 +201,26 @@ class _AppWrapperState extends State<_AppWrapper> {
       }
 
       final left = auth.sessionTimeLeft;
-      if (left != null &&
-          left <= widget.warningBefore &&
-          !_warningShown) {
+      if (left != null && left <= widget.warningBefore && !_warningShown) {
         _showSessionWarning(left);
       }
     });
   }
 
-  /// Диалог предупреждения. Показывается на текущей странице.
   Future<void> _showSessionWarning(Duration left) async {
     _warningShown = true;
     if (!mounted) return;
 
     final seconds = left.inSeconds;
+    // context здесь — из State, который находится ПОД MaterialApp,
+    // значит Navigator доступен.
     final result = await showDialog<bool>(
-      context: context, // Теперь этот context имеет доступ к Navigator!
+      context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: const Text('Сессия скоро истечёт'),
         content: Text(
-          'Через $seconds секунд вы будете отключены. '
-          'Продолжить работу?',
+          'Через $seconds секунд вы будете отключены. Продолжить работу?',
         ),
         actions: [
           TextButton(
@@ -227,11 +238,8 @@ class _AppWrapperState extends State<_AppWrapper> {
     if (!mounted) return;
 
     if (result == true) {
-      // Пользователь продлил — сбрасываем таймер в AuthNotifier.
       widget.authNotifier.extendSession();
-      // Флаг предупреждения сбросим в _onAuthChanged (left > warningBefore).
     } else {
-      // «Выйти» или диалог закрылся — принудительный выход.
       await _forceLogout();
     }
   }
@@ -242,9 +250,7 @@ class _AppWrapperState extends State<_AppWrapper> {
     await widget.authNotifier.logout();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Сессия истекла. Войдите снова.'),
-        ),
+        const SnackBar(content: Text('Сессия истекла. Войдите снова.')),
       );
     }
   }
@@ -260,39 +266,6 @@ class _AppWrapperState extends State<_AppWrapper> {
         await widget.authNotifier.logout();
       },
       child: widget.child,
-    );
-  }
-}
-
-class MyApp extends StatefulWidget {
-  const MyApp({super.key});
-
-  @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp.router(
-      title: 'Логистика',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.indigo,
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-      ),
-      routerConfig: appRouter,
-      // ИЗМЕНЕНИЕ: Добавлен builder. 
-      // Он помещает _AppWrapper ВНУТРЬ MaterialApp, давая ему доступ к Navigator.
-      builder: (context, child) {
-        return _AppWrapper(
-          authNotifier: context.read<AuthNotifier>(),
-          child: child ?? const SizedBox.shrink(),
-        );
-      },
     );
   }
 }

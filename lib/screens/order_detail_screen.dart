@@ -62,96 +62,101 @@ class OrderDetailScreen extends StatelessWidget {
           appBar: AppBar(title: Text('Заказ #${order.orderNumber}')),
           body: Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _infoRow('ID', order.id.toString()),
-                _infoRow('Номер заказа', order.orderNumber),
-                _infoRow(
-                  'Клиент',
-                  client?.companyName ?? 'ID: ${order.clientId}',
-                ),
-                _infoRow('Описание груза', order.cargoDescription),
-                _infoRow('Вес', '${order.weight} кг'),
-                _infoRow('Объём', '${order.volume} м³'),
-                _infoRow(
-                  'Дата отправки',
-                  order.shippingDate.toLocal().toString().split(' ')[0],
-                ),
-                if (order.deliveryDate != null)
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _infoRow('ID', order.id.toString()),
+                  _infoRow('Номер заказа', order.orderNumber),
                   _infoRow(
-                    'Дата доставки',
-                    order.deliveryDate!.toLocal().toString().split(' ')[0],
+                    'Клиент',
+                    client?.companyName ?? 'ID: ${order.clientId}',
                   ),
-                _infoRow('Статус', _getStatusText(order.status)),
-
-                const Divider(height: 32),
-                const Text(
-                  'Грузы',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                if (cargoList.isNotEmpty)
-                  ...cargoList.map((c) => _infoRow('•', c.name))
-                else
-                  const Text('Нет грузов',
-                      style: TextStyle(color: Colors.grey)),
-
-                const Divider(height: 32),
-                const Text(
-                  'Маршруты',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                if (routeList.isNotEmpty)
-                  ...routeList.map((r) => _infoRow('•', r.name))
-                else
-                  const Text('Нет маршрутов',
-                      style: TextStyle(color: Colors.grey)),
-
-                if (order.isDeleted)
-                  _infoRow('Статус', 'Скрыт', color: Colors.orange),
-                const Spacer(),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    ElevatedButton(
-                      onPressed: () => context.go('/orders'),
-                      child: const Text('Назад'),
+                  _infoRow('Описание груза', order.cargoDescription),
+                  _infoRow('Вес', '${order.weight} кг'),
+                  _infoRow('Объём', '${order.volume} м³'),
+                  _infoRow(
+                    'Дата отправки',
+                    order.shippingDate.toLocal().toString().split(' ')[0],
+                  ),
+                  if (order.deliveryDate != null)
+                    _infoRow(
+                      'Дата доставки',
+                      order.deliveryDate!.toLocal().toString().split(' ')[0],
                     ),
+                  _infoRow('Статус', _getStatusText(order.status)),
 
-                    // Редактирование — logist и выше.
-                    if (auth.uiHas(Role.logist))
+                  const Divider(height: 32),
+                  const Text(
+                    'Грузы',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  if (cargoList.isNotEmpty)
+                    ...cargoList.map((c) => _infoRow('•', c.name))
+                  else
+                    const Text('Нет грузов',
+                        style: TextStyle(color: Colors.grey)),
+
+                  const Divider(height: 32),
+                  const Text(
+                    'Маршруты',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  if (routeList.isNotEmpty)
+                    ...routeList.map((r) => _infoRow('•', r.name))
+                  else
+                    const Text('Нет маршрутов',
+                        style: TextStyle(color: Colors.grey)),
+
+                  if (order.isDeleted)
+                    _infoRow('Статус', 'Скрыт', color: Colors.orange),
+
+                  const SizedBox(height: 32),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    alignment: WrapAlignment.center,
+                    children: [
                       ElevatedButton(
-                        onPressed: () =>
-                            context.go('/orders/${order.id}/edit'),
-                        child: const Text('Редактировать'),
+                        onPressed: () => context.go('/orders'),
+                        child: const Text('Назад'),
                       ),
 
-                    // Скрыть — logist и выше.
-                    if (!order.isDeleted) ...[
+                      // Редактирование — logist и выше.
                       if (auth.uiHas(Role.logist))
                         ElevatedButton(
-                          onPressed: () => _softDelete(context, order.id),
-                          child: const Text('Скрыть'),
+                          onPressed: () =>
+                              context.go('/orders/${order.id}/edit'),
+                          child: const Text('Редактировать'),
                         ),
-                      // Удалить навсегда — только admin.
-                      if (auth.uiHas(Role.admin))
-                        ElevatedButton(
-                          onPressed: () => _hardDelete(context, order.id),
-                          child: const Text('Удалить'),
-                        ),
-                    ] else ...[
-                      // Восстановление — только admin.
-                      if (auth.uiHas(Role.admin))
-                        ElevatedButton(
-                          onPressed: () => _restore(context, order.id),
-                          child: const Text('Восстановить'),
-                        ),
+
+                      // Скрыть — logist и выше.
+                      if (!order.isDeleted) ...[
+                        if (auth.uiHas(Role.logist))
+                          ElevatedButton(
+                            onPressed: () => _softDelete(context, order.id),
+                            child: const Text('Скрыть'),
+                          ),
+                        // Удалить навсегда — только admin.
+                        if (auth.uiHas(Role.admin))
+                          ElevatedButton(
+                            onPressed: () => _hardDelete(context, order.id),
+                            child: const Text('Удалить'),
+                          ),
+                      ] else ...[
+                        // Восстановление — только admin.
+                        if (auth.uiHas(Role.admin))
+                          ElevatedButton(
+                            onPressed: () => _restore(context, order.id),
+                            child: const Text('Восстановить'),
+                          ),
+                      ],
                     ],
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -183,9 +188,18 @@ class OrderDetailScreen extends StatelessWidget {
             child: Text(
               '$label:',
               style: const TextStyle(fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ),
-          Expanded(child: Text(value, style: TextStyle(color: color))),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(color: color),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 3,
+            ),
+          ),
         ],
       ),
     );

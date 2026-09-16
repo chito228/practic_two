@@ -77,13 +77,18 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                   if (auth.uiHas(Role.logist))
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: Row(
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           const SizedBox(
                             width: 120,
                             child: Text(
                               'Статус:',
                               style: TextStyle(fontWeight: FontWeight.bold),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
                             ),
                           ),
                           DropdownButton<String>(
@@ -230,9 +235,18 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
             child: Text(
               '$label:',
               style: const TextStyle(fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ),
-          Expanded(child: Text(value, style: TextStyle(color: color))),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(color: color),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 3,
+            ),
+          ),
         ],
       ),
     );

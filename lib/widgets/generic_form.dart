@@ -98,6 +98,7 @@ class _GenericFormState extends State<GenericForm> {
         appBar: AppBar(
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
+            tooltip: 'Назад',
             onPressed: _handleCancel,
           ),
           title: Text(widget.title),
@@ -107,30 +108,40 @@ class _GenericFormState extends State<GenericForm> {
           child: Form(
             key: _formKey,
             child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  ...widget.fields.map((field) => _buildField(field)),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 600),
+                  child: Column(
                     children: [
-                      ElevatedButton(
-                        onPressed: _isSaving ? null : _handleCancel,
-                        child: const Text('Отмена'),
-                      ),
-                      ElevatedButton(
-                        onPressed: _isSaving ? null : _save,
-                        child: _isSaving
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : Text(widget.isEditing ? 'Сохранить' : 'Создать'),
+                      ...widget.fields.map((field) => _buildField(field)),
+                      const SizedBox(height: 24),
+                      Wrap(
+                        spacing: 16,
+                        runSpacing: 12,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          ElevatedButton(
+                            onPressed: _isSaving ? null : _handleCancel,
+                            child: const Text('Отмена'),
+                          ),
+                          ElevatedButton(
+                            onPressed: _isSaving ? null : _save,
+                            child: _isSaving
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : Text(widget.isEditing
+                                    ? 'Сохранить'
+                                    : 'Создать'),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -481,7 +492,9 @@ class _GenericFormState extends State<GenericForm> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(widget.isEditing ? 'Запись обновлена' : 'Запись создана'),
+            content: Text(widget.isEditing
+                ? 'Запись обновлена'
+                : 'Запись создана'),
           ),
         );
       }

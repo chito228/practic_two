@@ -106,12 +106,16 @@ class ClientDetailScreen extends StatelessWidget {
             child: Text(
               '$label:',
               style: const TextStyle(fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ),
           Expanded(
             child: Text(
               value,
               style: TextStyle(color: color),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 3,
             ),
           ),
         ],

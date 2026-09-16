@@ -9,6 +9,7 @@ import '../widgets/entity_table.dart';
 import '../widgets/responsive_list.dart';
 import '../widgets/error_view.dart';
 import '../widgets/empty_view.dart';
+import '../widgets/main_scaffold.dart';
 import '../utils/debounce.dart';
 import '../state/load_status.dart';
 import '../repositories/cargo_repository.dart';
@@ -36,27 +37,34 @@ class _CargoListScreenState extends State<CargoListScreen> {
     final notifier = Provider.of<CargoListNotifier>(context);
     final auth = context.watch<AuthNotifier>();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Грузы'),
-        actions: [
-          if (notifier.hasSelection)
-            Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: Center(
-                child: Text(
-                  'Выбрано: ${notifier.selected.length}',
-                  style: const TextStyle(fontSize: 14),
-                ),
+    return MainScaffold(
+      title: 'Грузы',
+      currentRoute: '/cargo',
+      actions: [
+        if (notifier.hasSelection)
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: Center(
+              child: Text(
+                'Выбрано: ${notifier.selected.length}',
+                style: const TextStyle(fontSize: 14),
               ),
             ),
-          if (notifier.hasSelection && auth.uiHas(Role.admin))
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              onPressed: () => _confirmDelete(context, notifier),
-            ),
-        ],
-      ),
+          ),
+        if (notifier.hasSelection && auth.uiHas(Role.admin))
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Удалить выбранные',
+            onPressed: () => _confirmDelete(context, notifier),
+          ),
+      ],
+      floatingActionButton: auth.uiHas(Role.admin)
+          ? FloatingActionButton(
+              onPressed: () => context.go('/cargo/create'),
+              tooltip: 'Создать груз',
+              child: const Icon(Icons.add),
+            )
+          : null,
       body: Column(
         children: [
           Padding(
@@ -80,12 +88,6 @@ class _CargoListScreenState extends State<CargoListScreen> {
           ),
         ],
       ),
-      floatingActionButton: auth.uiHas(Role.admin)
-          ? FloatingActionButton(
-              onPressed: () => context.go('/cargo/create'),
-              child: const Icon(Icons.add),
-            )
-          : null,
     );
   }
 
@@ -106,8 +108,13 @@ class _CargoListScreenState extends State<CargoListScreen> {
             ? notifier.items
             : notifier.items
                 .where((c) =>
-                    c.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-                    (c.description?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false))
+                    c.name
+                        .toLowerCase()
+                        .contains(_searchQuery.toLowerCase()) ||
+                    (c.description
+                            ?.toLowerCase()
+                            .contains(_searchQuery.toLowerCase()) ??
+                        false))
                 .toList();
 
         if (filteredItems.isEmpty) {
@@ -118,9 +125,21 @@ class _CargoListScreenState extends State<CargoListScreen> {
           cardBuilder: (cargo) => Card(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: ListTile(
-              title: Text(cargo.name),
-              subtitle: Text('Вес: ${cargo.weightPerUnit} кг, Объём: ${cargo.volumePerUnit} м³'),
-              trailing: Text('${cargo.orderIds.length} заказов'),
+              title: Text(
+                cargo.name,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              subtitle: Text(
+                'Вес: ${cargo.weightPerUnit} кг, Объём: ${cargo.volumePerUnit} м³',
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
+              ),
+              trailing: Text(
+                '${cargo.orderIds.length} заказов',
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
               onTap: () => context.go('/cargo/${cargo.id}'),
             ),
           ),
@@ -128,7 +147,8 @@ class _CargoListScreenState extends State<CargoListScreen> {
             items: items,
             idOf: (c) => c.id,
             selected: notifier.selected,
-            onToggleSelect: auth.uiHas(Role.admin) ? notifier.toggleSelection : null,
+            onToggleSelect:
+                auth.uiHas(Role.admin) ? notifier.toggleSelection : null,
             sortField: 'name',
             sortAscending: true,
             columns: [
@@ -198,7 +218,8 @@ class _CargoListScreenState extends State<CargoListScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Скрыть груз?'),
-        content: const Text('Груз будет скрыт, но не удалён. Его можно будет восстановить.'),
+        content: const Text(
+            'Груз будет скрыт, но не удалён. Его можно будет восстановить.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -212,10 +233,12 @@ class _CargoListScreenState extends State<CargoListScreen> {
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<CargoRepository>(context, listen: false);
+      final repository =
+          Provider.of<CargoRepository>(context, listen: false);
       await repository.softDelete(id);
       if (!context.mounted) return;
-      final notifier = Provider.of<CargoListNotifier>(context, listen: false);
+      final notifier =
+          Provider.of<CargoListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
@@ -223,7 +246,8 @@ class _CargoListScreenState extends State<CargoListScreen> {
   Future<void> _hardDelete(BuildContext context, int id) async {
     final orderRepo = Provider.of<OrderRepository>(context, listen: false);
     final allOrders = await orderRepo.findAll(includeDeleted: true);
-    final relatedOrders = allOrders.where((o) => o.cargoIds.contains(id) && !o.isDeleted).toList();
+    final relatedOrders =
+        allOrders.where((o) => o.cargoIds.contains(id) && !o.isDeleted).toList();
     if (!context.mounted) return;
 
     if (relatedOrders.isNotEmpty) {
@@ -244,16 +268,17 @@ class _CargoListScreenState extends State<CargoListScreen> {
               ),
               const SizedBox(height: 8),
               ...relatedOrders.map((order) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2.0),
-                child: Text(
-                  '• Заказ #${order.orderNumber} (${order.cargoDescription})',
-                  style: const TextStyle(fontSize: 14),
-                ),
-              )),
+                    padding: const EdgeInsets.symmetric(vertical: 2.0),
+                    child: Text(
+                      '• Заказ #${order.orderNumber} (${order.cargoDescription})',
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  )),
               const SizedBox(height: 12),
               Text(
                 'Количество заказов: ${relatedOrders.length}',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                style:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -291,27 +316,32 @@ class _CargoListScreenState extends State<CargoListScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить навсегда', style: TextStyle(fontSize: 14, color: Colors.red)),
+            child: const Text('Удалить навсегда',
+                style: TextStyle(fontSize: 14, color: Colors.red)),
           ),
         ],
       ),
     );
     if (confirmed == true) {
-      final repository = Provider.of<CargoRepository>(context, listen: false);
+      final repository =
+          Provider.of<CargoRepository>(context, listen: false);
       await repository.hardDelete(id);
       if (!context.mounted) return;
-      final notifier = Provider.of<CargoListNotifier>(context, listen: false);
+      final notifier =
+          Provider.of<CargoListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
 
-  Future<void> _confirmDelete(BuildContext context, CargoListNotifier notifier) async {
+  Future<void> _confirmDelete(
+      BuildContext context, CargoListNotifier notifier) async {
     final orderRepo = Provider.of<OrderRepository>(context, listen: false);
     final allOrders = await orderRepo.findAll(includeDeleted: true);
     final cargosWithOrders = <int>[];
 
     for (final id in notifier.selected) {
-      final relatedOrders = allOrders.where((o) => o.cargoIds.contains(id) && !o.isDeleted);
+      final relatedOrders =
+          allOrders.where((o) => o.cargoIds.contains(id) && !o.isDeleted);
       if (relatedOrders.isNotEmpty) {
         cargosWithOrders.add(id);
       }
@@ -346,7 +376,8 @@ class _CargoListScreenState extends State<CargoListScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Подтверждение удаления'),
-        content: Text('Вы уверены, что хотите удалить ${notifier.selected.length} грузов?'),
+        content: Text(
+            'Вы уверены, что хотите удалить ${notifier.selected.length} грузов?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
