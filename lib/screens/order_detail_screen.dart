@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../core/api_exceptions.dart';
+import '../models/role.dart';
 import '../repositories/order_repository.dart';
+import '../state/auth_notifier.dart';
 import '../state/order_list_notifier.dart';
 
 class OrderDetailScreen extends StatelessWidget {
@@ -12,11 +14,11 @@ class OrderDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final repository = Provider.of<OrderRepository>(context);
+    final auth = context.watch<AuthNotifier>();
 
     return FutureBuilder<OrderFull?>(
       future: repository.findByIdWithRelations(id),
       builder: (context, snapshot) {
-        // Состояние загрузки
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Scaffold(
             appBar: AppBar(title: const Text('Заказ')),
@@ -24,7 +26,6 @@ class OrderDetailScreen extends StatelessWidget {
           );
         }
 
-        // Ошибка загрузки
         if (snapshot.hasError) {
           return Scaffold(
             appBar: AppBar(title: const Text('Заказ')),
@@ -35,9 +36,7 @@ class OrderDetailScreen extends StatelessWidget {
                   Text('Ошибка загрузки: ${snapshot.error}'),
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    onPressed: () {
-                      context.go('/orders/$id');
-                    },
+                    onPressed: () => context.go('/orders/$id'),
                     child: const Text('Повторить'),
                   ),
                 ],
@@ -46,7 +45,6 @@ class OrderDetailScreen extends StatelessWidget {
           );
         }
 
-        // Не найдено
         if (snapshot.data == null) {
           return Scaffold(
             appBar: AppBar(title: const Text('Заказ')),
@@ -96,7 +94,8 @@ class OrderDetailScreen extends StatelessWidget {
                 if (cargoList.isNotEmpty)
                   ...cargoList.map((c) => _infoRow('•', c.name))
                 else
-                  const Text('Нет грузов', style: TextStyle(color: Colors.grey)),
+                  const Text('Нет грузов',
+                      style: TextStyle(color: Colors.grey)),
 
                 const Divider(height: 32),
                 const Text(
@@ -107,7 +106,8 @@ class OrderDetailScreen extends StatelessWidget {
                 if (routeList.isNotEmpty)
                   ...routeList.map((r) => _infoRow('•', r.name))
                 else
-                  const Text('Нет маршрутов', style: TextStyle(color: Colors.grey)),
+                  const Text('Нет маршрутов',
+                      style: TextStyle(color: Colors.grey)),
 
                 if (order.isDeleted)
                   _infoRow('Статус', 'Скрыт', color: Colors.orange),
@@ -119,24 +119,35 @@ class OrderDetailScreen extends StatelessWidget {
                       onPressed: () => context.go('/orders'),
                       child: const Text('Назад'),
                     ),
-                    ElevatedButton(
-                      onPressed: () => context.go('/orders/${order.id}/edit'),
-                      child: const Text('Редактировать'),
-                    ),
+
+                    // Редактирование — logist и выше.
+                    if (auth.uiHas(Role.logist))
+                      ElevatedButton(
+                        onPressed: () =>
+                            context.go('/orders/${order.id}/edit'),
+                        child: const Text('Редактировать'),
+                      ),
+
+                    // Скрыть — logist и выше.
                     if (!order.isDeleted) ...[
-                      ElevatedButton(
-                        onPressed: () => _softDelete(context, order.id),
-                        child: const Text('Скрыть'),
-                      ),
-                      ElevatedButton(
-                        onPressed: () => _hardDelete(context, order.id),
-                        child: const Text('Удалить'),
-                      ),
+                      if (auth.uiHas(Role.logist))
+                        ElevatedButton(
+                          onPressed: () => _softDelete(context, order.id),
+                          child: const Text('Скрыть'),
+                        ),
+                      // Удалить навсегда — только admin.
+                      if (auth.uiHas(Role.admin))
+                        ElevatedButton(
+                          onPressed: () => _hardDelete(context, order.id),
+                          child: const Text('Удалить'),
+                        ),
                     ] else ...[
-                      ElevatedButton(
-                        onPressed: () => _restore(context, order.id),
-                        child: const Text('Восстановить'),
-                      ),
+                      // Восстановление — только admin.
+                      if (auth.uiHas(Role.admin))
+                        ElevatedButton(
+                          onPressed: () => _restore(context, order.id),
+                          child: const Text('Восстановить'),
+                        ),
                     ],
                   ],
                 ),
@@ -180,15 +191,14 @@ class OrderDetailScreen extends StatelessWidget {
     );
   }
 
-  // ─────────────────────────────────────────────────────
-  // Soft-delete
-  // ─────────────────────────────────────────────────────
   Future<void> _softDelete(BuildContext context, int id) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Скрыть заказ?'),
-        content: const Text('Заказ будет скрыт, но не удалён. Его можно будет восстановить.'),
+        content: const Text(
+          'Заказ будет скрыт, но не удалён. Его можно будет восстановить.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -241,9 +251,6 @@ class OrderDetailScreen extends StatelessWidget {
     context.go('/orders');
   }
 
-  // ─────────────────────────────────────────────────────
-  // Hard-delete
-  // ─────────────────────────────────────────────────────
   Future<void> _hardDelete(BuildContext context, int id) async {
     final orderRepo = Provider.of<OrderRepository>(context, listen: false);
 
@@ -297,7 +304,10 @@ class OrderDetailScreen extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 'Количество связанных записей: ${related.length}',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -383,9 +393,6 @@ class OrderDetailScreen extends StatelessWidget {
     context.go('/orders');
   }
 
-  // ─────────────────────────────────────────────────────
-  // Restore
-  // ─────────────────────────────────────────────────────
   Future<void> _restore(BuildContext context, int id) async {
     final confirmed = await showDialog<bool>(
       context: context,

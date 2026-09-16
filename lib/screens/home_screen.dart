@@ -46,6 +46,16 @@ class HomeScreen extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                // ─── Диспетчерская — только для logist ───
+                if (auth.uiHasExactly(Role.logist)) ...[
+                  _buildMenuButton(
+                    context,
+                    'Диспетчерская',
+                    '/dispatch',
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
                 _buildMenuButton(context, 'Клиенты', '/clients'),
                 const SizedBox(height: 12),
                 _buildMenuButton(context, 'Заказы', '/orders'),

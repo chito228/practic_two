@@ -204,9 +204,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       final serverError = _serverErrors['password'];
                       if (serverError != null) return serverError;
                       if (v == null || v.isEmpty) return 'Введите пароль';
-                      if (v.length < 8) return 'Пароль не короче 8 символов';
+                      if (v.length < 8) {
+                        return 'Пароль не короче 8 символов';
+                      }
                       if (!RegExp(r'[a-zA-Z]').hasMatch(v)) {
                         return 'Пароль: обязательна хотя бы одна латинская буква';
+                      }
+                      if (!RegExp(r'\d').hasMatch(v)) {
+                        return 'Пароль: обязательна хотя бы одна цифра';
+                      }
+                      if (!RegExp(r'[!@#\$%^&*(),.?":{}|<>_\-]').hasMatch(v)) {
+                        return 'Пароль: обязателен хотя бы один специальный символ';
                       }
                       return null;
                     },

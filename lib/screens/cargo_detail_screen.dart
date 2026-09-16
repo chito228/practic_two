@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../core/api_exceptions.dart';
+import '../models/role.dart';
 import '../repositories/cargo_repository.dart';
 import '../repositories/order_repository.dart';
+import '../state/auth_notifier.dart';
 import '../state/cargo_list_notifier.dart';
 
 class CargoDetailScreen extends StatelessWidget {
@@ -13,6 +15,8 @@ class CargoDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final repository = Provider.of<CargoRepository>(context);
+    final auth = context.watch<AuthNotifier>();
+
     return FutureBuilder(
       future: repository.findById(id),
       builder: (context, snapshot) {
@@ -38,7 +42,8 @@ class CargoDetailScreen extends StatelessWidget {
               children: [
                 _infoRow('ID', cargo.id.toString()),
                 _infoRow('Название', cargo.name),
-                if (cargo.description != null) _infoRow('Описание', cargo.description!),
+                if (cargo.description != null)
+                  _infoRow('Описание', cargo.description!),
                 _infoRow('Вес за единицу', '${cargo.weightPerUnit} кг'),
                 _infoRow('Объём за единицу', '${cargo.volumePerUnit} м³'),
                 _infoRow('Количество заказов', cargo.orderIds.length.toString()),
@@ -52,24 +57,32 @@ class CargoDetailScreen extends StatelessWidget {
                       onPressed: () => context.go('/cargo'),
                       child: const Text('Назад'),
                     ),
-                    ElevatedButton(
-                      onPressed: () => context.go('/cargo/${cargo.id}/edit'),
-                      child: const Text('Редактировать'),
-                    ),
+
+                    // Редактирование груза — только admin.
+                    if (auth.uiHas(Role.admin))
+                      ElevatedButton(
+                        onPressed: () => context.go('/cargo/${cargo.id}/edit'),
+                        child: const Text('Редактировать'),
+                      ),
+
+                    // Скрыть/удалить/восстановить — только admin.
                     if (!cargo.isDeleted) ...[
-                      ElevatedButton(
-                        onPressed: () => _softDelete(context, cargo.id),
-                        child: const Text('Скрыть'),
-                      ),
-                      ElevatedButton(
-                        onPressed: () => _hardDelete(context, cargo.id),
-                        child: const Text('Удалить'),
-                      ),
+                      if (auth.uiHas(Role.admin))
+                        ElevatedButton(
+                          onPressed: () => _softDelete(context, cargo.id),
+                          child: const Text('Скрыть'),
+                        ),
+                      if (auth.uiHas(Role.admin))
+                        ElevatedButton(
+                          onPressed: () => _hardDelete(context, cargo.id),
+                          child: const Text('Удалить'),
+                        ),
                     ] else ...[
-                      ElevatedButton(
-                        onPressed: () => _restore(context, cargo.id),
-                        child: const Text('Восстановить'),
-                      ),
+                      if (auth.uiHas(Role.admin))
+                        ElevatedButton(
+                          onPressed: () => _restore(context, cargo.id),
+                          child: const Text('Восстановить'),
+                        ),
                     ],
                   ],
                 ),
@@ -89,7 +102,10 @@ class CargoDetailScreen extends StatelessWidget {
         children: [
           SizedBox(
             width: 120,
-            child: Text('$label:', style: const TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(
+              '$label:',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
           Expanded(child: Text(value, style: TextStyle(color: color))),
         ],
@@ -192,12 +208,12 @@ class CargoDetailScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               ...relatedOrders.map((order) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2.0),
-                child: Text(
-                  '• Заказ #${order.orderNumber} (${order.cargoDescription})',
-                  style: const TextStyle(fontSize: 14),
-                ),
-              )),
+                    padding: const EdgeInsets.symmetric(vertical: 2.0),
+                    child: Text(
+                      '• Заказ #${order.orderNumber} (${order.cargoDescription})',
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  )),
               const SizedBox(height: 12),
               Text(
                 'Количество заказов: ${relatedOrders.length}',
@@ -239,7 +255,10 @@ class CargoDetailScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить навсегда', style: TextStyle(fontSize: 14, color: Colors.red)),
+            child: const Text(
+              'Удалить навсегда',
+              style: TextStyle(fontSize: 14, color: Colors.red),
+            ),
           ),
         ],
       ),

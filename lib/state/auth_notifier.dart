@@ -32,8 +32,8 @@ class AuthNotifier extends ChangeNotifier {
 
   /// Максимальная длительность сессии. По умолчанию — 60 минут.
   /// ИЗМЕНЕНИЕ: было seconds: 90, исправлено на minutes: 60 в соответствии с комментарием.
-  Duration maxSessionDuration = const Duration(seconds: 20);
-
+  Duration maxSessionDuration = const Duration(minutes: 60);
+  
   AppUser? get user => _user;
   String? get accessToken => _accessToken;
   String? get refreshToken => _refreshToken;

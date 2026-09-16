@@ -13,6 +13,7 @@ import 'screens/client_form_screen.dart';
 import 'screens/order_list_screen.dart';
 import 'screens/order_detail_screen.dart';
 import 'screens/order_form_screen.dart';
+import 'screens/dispatch_screen.dart';
 import 'screens/cargo_list_screen.dart';
 import 'screens/cargo_detail_screen.dart';
 import 'screens/cargo_form_screen.dart';
@@ -146,6 +147,16 @@ void buildRouter(AuthNotifier auth) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           return OrderDetailScreen(id: id ?? 0);
         },
+      ),
+
+      // ─── Диспетчерская (только logist) ───────────────
+      // Уникальный экран логиста. hasExactly — не пропустит
+      // ни manager, ни admin. Это требование пункта 8 ПР5.
+      GoRoute(
+        path: '/dispatch',
+        redirect: (context, state) =>
+            auth.hasExactly(Role.logist) ? null : '/forbidden',
+        builder: (context, state) => const DispatchScreen(),
       ),
 
       // ─── Грузы ───────────────────────────────────────

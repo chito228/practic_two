@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../core/api_exceptions.dart';
+import '../models/role.dart';
 import '../repositories/route_repository.dart';
 import '../repositories/vehicle_repository.dart';
 import '../repositories/order_repository.dart';
+import '../state/auth_notifier.dart';
 import '../state/route_list_notifier.dart';
 import '../models/vehicle.dart';
 
@@ -22,6 +24,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final repository = Provider.of<RouteRepository>(context);
+    final auth = context.watch<AuthNotifier>();
+
     return FutureBuilder(
       future: repository.findById(widget.id),
       builder: (context, snapshot) {
@@ -56,14 +60,18 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                     _infoRow('Откуда', route.origin),
                     _infoRow('Куда', route.destination),
                     _infoRow('Расстояние', '${route.distance} км'),
-                    _infoRow('Транспорт',
+                    _infoRow(
+                      'Транспорт',
                       _vehicle != null
-                        ? '${_vehicle!.plateNumber} (${_vehicle!.driverName})'
-                        : 'ID: ${route.vehicleId}'
+                          ? '${_vehicle!.plateNumber} (${_vehicle!.driverName})'
+                          : 'ID: ${route.vehicleId}',
                     ),
                     _infoRow('Расчётное время', '${route.estimatedTime} ч'),
                     _infoRow('Статус', _getStatusText(route.status)),
-                    _infoRow('Количество заказов', route.orderIds.length.toString()),
+                    _infoRow(
+                      'Количество заказов',
+                      route.orderIds.length.toString(),
+                    ),
                     if (route.isDeleted)
                       _infoRow('Статус', 'Скрыт', color: Colors.orange),
                     const Spacer(),
@@ -74,24 +82,35 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                           onPressed: () => context.go('/routes'),
                           child: const Text('Назад'),
                         ),
-                        ElevatedButton(
-                          onPressed: () => context.go('/routes/${route.id}/edit'),
-                          child: const Text('Редактировать'),
-                        ),
+
+                        // Редактирование маршрута — logist и выше.
+                        if (auth.uiHas(Role.logist))
+                          ElevatedButton(
+                            onPressed: () =>
+                                context.go('/routes/${route.id}/edit'),
+                            child: const Text('Редактировать'),
+                          ),
+
+                        // Скрыть — logist и выше.
                         if (!route.isDeleted) ...[
-                          ElevatedButton(
-                            onPressed: () => _softDelete(context, route.id),
-                            child: const Text('Скрыть'),
-                          ),
-                          ElevatedButton(
-                            onPressed: () => _hardDelete(context, route.id),
-                            child: const Text('Удалить'),
-                          ),
+                          if (auth.uiHas(Role.logist))
+                            ElevatedButton(
+                              onPressed: () => _softDelete(context, route.id),
+                              child: const Text('Скрыть'),
+                            ),
+                          // Удалить навсегда — только admin.
+                          if (auth.uiHas(Role.admin))
+                            ElevatedButton(
+                              onPressed: () => _hardDelete(context, route.id),
+                              child: const Text('Удалить'),
+                            ),
                         ] else ...[
-                          ElevatedButton(
-                            onPressed: () => _restore(context, route.id),
-                            child: const Text('Восстановить'),
-                          ),
+                          // Восстановление — только admin.
+                          if (auth.uiHas(Role.admin))
+                            ElevatedButton(
+                              onPressed: () => _restore(context, route.id),
+                              child: const Text('Восстановить'),
+                            ),
                         ],
                       ],
                     ),
@@ -107,10 +126,14 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
 
   String _getStatusText(String status) {
     switch (status) {
-      case 'active': return 'Активный';
-      case 'completed': return 'Завершён';
-      case 'cancelled': return 'Отменён';
-      default: return status;
+      case 'active':
+        return 'Активный';
+      case 'completed':
+        return 'Завершён';
+      case 'cancelled':
+        return 'Отменён';
+      default:
+        return status;
     }
   }
 
@@ -122,7 +145,10 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
         children: [
           SizedBox(
             width: 120,
-            child: Text('$label:', style: const TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(
+              '$label:',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
           Expanded(child: Text(value, style: TextStyle(color: color))),
         ],
@@ -135,7 +161,9 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Скрыть маршрут?'),
-        content: const Text('Маршрут будет скрыт, но не удалён. Его можно будет восстановить.'),
+        content: const Text(
+          'Маршрут будет скрыт, но не удалён. Его можно будет восстановить.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -225,12 +253,12 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               ),
               const SizedBox(height: 8),
               ...relatedOrders.map((order) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2.0),
-                child: Text(
-                  '• Заказ #${order.orderNumber} (${order.cargoDescription})',
-                  style: const TextStyle(fontSize: 14),
-                ),
-              )),
+                    padding: const EdgeInsets.symmetric(vertical: 2.0),
+                    child: Text(
+                      '• Заказ #${order.orderNumber} (${order.cargoDescription})',
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  )),
               const SizedBox(height: 12),
               Text(
                 'Количество заказов: ${relatedOrders.length}',
@@ -272,7 +300,10 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить навсегда', style: TextStyle(fontSize: 14, color: Colors.red)),
+            child: const Text(
+              'Удалить навсегда',
+              style: TextStyle(fontSize: 14, color: Colors.red),
+            ),
           ),
         ],
       ),

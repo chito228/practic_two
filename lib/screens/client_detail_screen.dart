@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../core/api_exceptions.dart';
+import '../models/role.dart';
 import '../repositories/client_repository.dart';
 import '../repositories/order_repository.dart';
+import '../state/auth_notifier.dart';
 import '../state/client_list_notifier.dart';
 
 class ClientDetailScreen extends StatelessWidget {
@@ -13,6 +15,8 @@ class ClientDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final repository = Provider.of<ClientRepository>(context);
+    final auth = context.watch<AuthNotifier>();
+
     return FutureBuilder(
       future: repository.findById(id),
       builder: (context, snapshot) {
@@ -53,24 +57,33 @@ class ClientDetailScreen extends StatelessWidget {
                       onPressed: () => context.go('/clients'),
                       child: const Text('Назад'),
                     ),
-                    ElevatedButton(
-                      onPressed: () => context.go('/clients/${client.id}/edit'),
-                      child: const Text('Редактировать'),
-                    ),
+
+                    // Редактирование — только logist и выше.
+                    if (auth.uiHas(Role.logist))
+                      ElevatedButton(
+                        onPressed: () =>
+                            context.go('/clients/${client.id}/edit'),
+                        child: const Text('Редактировать'),
+                      ),
+
+                    // Скрыть/удалить — только admin.
                     if (!client.isDeleted) ...[
-                      ElevatedButton(
-                        onPressed: () => _softDelete(context, client.id),
-                        child: const Text('Скрыть'),
-                      ),
-                      ElevatedButton(
-                        onPressed: () => _hardDelete(context, client.id),
-                        child: const Text('Удалить'),
-                      ),
+                      if (auth.uiHas(Role.admin))
+                        ElevatedButton(
+                          onPressed: () => _softDelete(context, client.id),
+                          child: const Text('Скрыть'),
+                        ),
+                      if (auth.uiHas(Role.admin))
+                        ElevatedButton(
+                          onPressed: () => _hardDelete(context, client.id),
+                          child: const Text('Удалить'),
+                        ),
                     ] else ...[
-                      ElevatedButton(
-                        onPressed: () => _restore(context, client.id),
-                        child: const Text('Восстановить'),
-                      ),
+                      if (auth.uiHas(Role.admin))
+                        ElevatedButton(
+                          onPressed: () => _restore(context, client.id),
+                          child: const Text('Восстановить'),
+                        ),
                     ],
                   ],
                 ),
@@ -165,7 +178,6 @@ class ClientDetailScreen extends StatelessWidget {
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
-    // Предварительная проверка связей — оставляем.
     final orderRepo = Provider.of<OrderRepository>(context, listen: false);
     List<dynamic> orders;
     try {
@@ -198,12 +210,12 @@ class ClientDetailScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               ...orders.map((order) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2.0),
-                child: Text(
-                  '• Заказ #${order.orderNumber} (${order.cargoDescription})',
-                  style: const TextStyle(fontSize: 14),
-                ),
-              )),
+                    padding: const EdgeInsets.symmetric(vertical: 2.0),
+                    child: Text(
+                      '• Заказ #${order.orderNumber} (${order.cargoDescription})',
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  )),
               const SizedBox(height: 12),
               Text(
                 'Количество заказов: ${orders.length}',
@@ -241,7 +253,10 @@ class ClientDetailScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить навсегда', style: TextStyle(fontSize: 14, color: Colors.red)),
+            child: const Text(
+              'Удалить навсегда',
+              style: TextStyle(fontSize: 14, color: Colors.red),
+            ),
           ),
         ],
       ),
