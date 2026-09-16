@@ -77,9 +77,7 @@ void main() {
       statusCode: 422,
       body: {
         'message': 'Ошибка валидации',
-        'errors': {
-          'email': 'Клиент с таким email уже существует',
-        },
+        'errors': {'email': 'Клиент с таким email уже существует'},
       },
     );
 
@@ -155,10 +153,10 @@ Dio _buildTestDio(MockAdapter adapter) {
 }
 
 Client _makeClient() => Client(
-      id: 0,
-      companyName: 'Тестовая компания',
-      contactPerson: 'Тестовый Тест',
-      phone: '+7-999-000-00-00',
-      email: 'test@example.com',
-      orderIds: const [],
-    );
+  id: 0,
+  companyName: 'Тестовая компания',
+  contactPerson: 'Тестовый Тест',
+  phone: '+7-999-000-00-00',
+  email: 'test@example.com',
+  orderIds: const [],
+);

@@ -35,7 +35,9 @@ class PaginationControls extends StatelessWidget {
                 ),
                 IconButton(
                   icon: const Icon(Icons.chevron_left),
-                  onPressed: currentPage > 1 ? () => onPageChanged(currentPage - 1) : null,
+                  onPressed: currentPage > 1
+                      ? () => onPageChanged(currentPage - 1)
+                      : null,
                   tooltip: 'Предыдущая страница',
                 ),
                 Text(
@@ -44,12 +46,16 @@ class PaginationControls extends StatelessWidget {
                 ),
                 IconButton(
                   icon: const Icon(Icons.chevron_right),
-                  onPressed: currentPage < totalPages ? () => onPageChanged(currentPage + 1) : null,
+                  onPressed: currentPage < totalPages
+                      ? () => onPageChanged(currentPage + 1)
+                      : null,
                   tooltip: 'Следующая страница',
                 ),
                 IconButton(
                   icon: const Icon(Icons.last_page),
-                  onPressed: currentPage < totalPages ? () => onPageChanged(totalPages) : null,
+                  onPressed: currentPage < totalPages
+                      ? () => onPageChanged(totalPages)
+                      : null,
                   tooltip: 'Последняя страница',
                 ),
               ] else ...[
@@ -63,10 +69,12 @@ class PaginationControls extends StatelessWidget {
               DropdownButton<int>(
                 value: pageSize,
                 items: const [10, 25, 50]
-                    .map((size) => DropdownMenuItem(
-                          value: size,
-                          child: Text(size.toString()),
-                        ))
+                    .map(
+                      (size) => DropdownMenuItem(
+                        value: size,
+                        child: Text(size.toString()),
+                      ),
+                    )
                     .toList(),
                 onChanged: (value) {
                   if (value != null) onSizeChanged(value);

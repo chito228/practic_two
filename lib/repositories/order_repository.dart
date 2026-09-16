@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+
 import '../models/order.dart';
 import '../models/client.dart';
 import '../models/cargo.dart';
@@ -26,10 +27,7 @@ abstract class OrderRepository {
   Future<List<Order>> findAll({bool includeDeleted = false});
   Future<Order?> findById(int id);
   Future<OrderFull?> findByIdWithRelations(int id);
-  Future<PageResult<Order>> find(
-    OrderQuery query, {
-    CancelToken? cancelToken,
-  });
+  Future<PageResult<Order>> find(OrderQuery query, {CancelToken? cancelToken});
   Future<Order> create(Order item);
   Future<Order> update(Order item);
   Future<void> softDelete(int id);

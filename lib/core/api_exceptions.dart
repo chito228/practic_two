@@ -19,9 +19,7 @@ class NetworkException extends ApiException {
 
 /// 401 — не аутентифицирован либо срок действия токена истёк.
 class UnauthorizedException extends ApiException {
-  const UnauthorizedException([
-    super.message = 'Требуется вход в систему.',
-  ]);
+  const UnauthorizedException([super.message = 'Требуется вход в систему.']);
 }
 
 /// 403 — роль не позволяет выполнить операцию.
@@ -64,16 +62,17 @@ ApiException mapHttpError(int status, dynamic body) {
 
   return switch (status) {
     401 => UnauthorizedException(message ?? 'Требуется вход в систему.'),
-    403 => ForbiddenException(message ?? 'Недостаточно прав для этого действия.'),
+    403 => ForbiddenException(
+      message ?? 'Недостаточно прав для этого действия.',
+    ),
     404 => NotFoundException(message ?? 'Запись не найдена.'),
     409 => ConflictException(message ?? 'Операция невозможна.'),
     422 => ValidationException(
-        message ?? 'Ошибка валидации',
-        (body is Map && body['errors'] is Map)
-            ? (body['errors'] as Map)
-                .map((k, v) => MapEntry('$k', '$v'))
-            : const {},
-      ),
+      message ?? 'Ошибка валидации',
+      (body is Map && body['errors'] is Map)
+          ? (body['errors'] as Map).map((k, v) => MapEntry('$k', '$v'))
+          : const {},
+    ),
     _ => ServerException(message ?? 'Неизвестная ошибка (код $status).'),
   };
 }
@@ -89,13 +88,14 @@ ApiException mapDioError(DioException e) {
   return switch (e.type) {
     DioExceptionType.connectionTimeout ||
     DioExceptionType.sendTimeout ||
-    DioExceptionType.receiveTimeout =>
-      const NetworkException('Сервер не ответил вовремя.'),
+    DioExceptionType.receiveTimeout => const NetworkException(
+      'Сервер не ответил вовремя.',
+    ),
     DioExceptionType.connectionError => const NetworkException(
-        'Не удалось соединиться с сервером. '
-        'Если сервер запущен, откройте консоль браузера '
-        'и проверьте наличие ошибки CORS.',
-      ),
+      'Не удалось соединиться с сервером. '
+      'Если сервер запущен, откройте консоль браузера '
+      'и проверьте наличие ошибки CORS.',
+    ),
     DioExceptionType.cancel => const NetworkException('Запрос отменён.'),
     _ => const ServerException(),
   };

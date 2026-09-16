@@ -19,8 +19,7 @@ void main() {
   // Тест 5. findByIdWithRelations() — разбор развёрнутого ответа.
   // Проверяем: client, cargo[], routes[] разбираются в OrderFull.
   // ─────────────────────────────────────────────────────
-  test('findByIdWithRelations() разбирает client, cargo[], routes[]',
-      () async {
+  test('findByIdWithRelations() разбирает client, cargo[], routes[]', () async {
     adapter.on(
       'GET',
       '/orders/1',

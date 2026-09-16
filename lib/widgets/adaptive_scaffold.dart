@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../utils/breakpoints.dart';
 
-/// Адаптивный каркас:
-/// - < 768: своя нижняя панель с текстом (без иконок)
-/// - >= 768: боковое меню только текстом, шириной 180/220px
 class AdaptiveScaffold extends StatelessWidget {
   final Widget body;
   final String title;
@@ -121,9 +119,7 @@ class _SideMenuItem extends StatelessWidget {
           label,
           style: TextStyle(
             fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-            color: selected
-                ? scheme.onSecondaryContainer
-                : scheme.onSurface,
+            color: selected ? scheme.onSecondaryContainer : scheme.onSurface,
           ),
           overflow: TextOverflow.ellipsis,
           maxLines: 1,

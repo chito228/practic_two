@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+
 import '../core/api_exceptions.dart';
 import '../models/role.dart';
 import '../models/vehicle.dart';
@@ -19,8 +20,6 @@ class VehicleDetailScreen extends StatefulWidget {
 }
 
 class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
-  /// Future хранится в поле состояния, а не создаётся в build().
-  /// Это позволяет пересоздавать его через setState после изменения данных.
   late Future<Vehicle?> _future;
 
   @override
@@ -33,7 +32,6 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
     return context.read<VehicleRepository>().findById(widget.id);
   }
 
-  /// Перезапросить данные с сервера и перерисовать экран.
   void _reload() {
     setState(() {
       _future = _load();
@@ -276,16 +274,17 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
     }
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Статус обновлён')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Статус обновлён')));
 
     // Перезапрашиваем данные с сервера — экран покажет новый статус.
     _reload();
 
     // Обновляем и список (на случай, если пользователь вернётся назад).
-    final listNotifier =
-        Provider.of<VehicleListNotifier>(context, listen: false);
+    final listNotifier = Provider.of<VehicleListNotifier>(
+      context,
+      listen: false,
+    );
     await listNotifier.load();
   }
 
@@ -316,8 +315,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
     if (!mounted) return;
 
     try {
-      final repository =
-          Provider.of<VehicleRepository>(context, listen: false);
+      final repository = Provider.of<VehicleRepository>(context, listen: false);
       await repository.softDelete(id);
     } on ForbiddenException catch (e) {
       if (mounted) {
@@ -347,9 +345,8 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
     await notifier.load();
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Транспорт скрыт')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Транспорт скрыт')));
     context.go('/vehicles');
   }
 
@@ -364,9 +361,8 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
       routes = await routeRepo.findByVehicleId(id);
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
       }
       return;
     }
@@ -389,13 +385,15 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                 style: TextStyle(fontSize: 14),
               ),
               const SizedBox(height: 8),
-              ...routes.map((route) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2.0),
-                    child: Text(
-                      '• ${route.name}',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                  )),
+              ...routes.map(
+                (route) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2.0),
+                  child: Text(
+                    '• ${route.name}',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ),
+              ),
               const SizedBox(height: 12),
               Text(
                 'Количество маршрутов: ${routes.length}',
@@ -452,8 +450,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
     if (!mounted) return;
 
     try {
-      final repository =
-          Provider.of<VehicleRepository>(context, listen: false);
+      final repository = Provider.of<VehicleRepository>(context, listen: false);
       await repository.hardDelete(id);
     } on ForbiddenException catch (e) {
       if (mounted) {
@@ -483,9 +480,9 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
     await notifier.load();
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Транспорт удалён навсегда')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Транспорт удалён навсегда')));
     context.go('/vehicles');
   }
 
@@ -514,8 +511,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
     if (!mounted) return;
 
     try {
-      final repository =
-          Provider.of<VehicleRepository>(context, listen: false);
+      final repository = Provider.of<VehicleRepository>(context, listen: false);
       await repository.restore(id);
     } on ForbiddenException catch (e) {
       if (mounted) {
@@ -545,9 +541,8 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
     await notifier.load();
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Транспорт восстановлен')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Транспорт восстановлен')));
     context.go('/vehicles');
   }
 }

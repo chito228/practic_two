@@ -56,12 +56,15 @@ class _DispatchScreenState extends State<DispatchScreen> {
       final dayStart = DateTime(now.year, now.month, now.day);
       final dayEnd = dayStart.add(const Duration(days: 1));
 
-      final todayOrders = allOrders
-          .where((o) =>
-              !o.shippingDate.isBefore(dayStart) &&
-              o.shippingDate.isBefore(dayEnd))
-          .toList()
-        ..sort((a, b) => a.shippingDate.compareTo(b.shippingDate));
+      final todayOrders =
+          allOrders
+              .where(
+                (o) =>
+                    !o.shippingDate.isBefore(dayStart) &&
+                    o.shippingDate.isBefore(dayEnd),
+              )
+              .toList()
+            ..sort((a, b) => a.shippingDate.compareTo(b.shippingDate));
 
       setState(() {
         _orders = todayOrders;
@@ -89,9 +92,8 @@ class _DispatchScreenState extends State<DispatchScreen> {
       await repo.update(order.copyWith(status: newStatus));
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
       return;
     }
     if (!mounted) return;

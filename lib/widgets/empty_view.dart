@@ -4,10 +4,7 @@ import 'package:flutter/material.dart';
 class EmptyView extends StatelessWidget {
   final String? message;
 
-  const EmptyView({
-    super.key,
-    this.message,
-  });
+  const EmptyView({super.key, this.message});
 
   @override
   Widget build(BuildContext context) {

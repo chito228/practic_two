@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+
 import '../core/reference_cache.dart';
 import '../models/route.dart' as model;
 import '../models/vehicle.dart';
@@ -72,7 +73,8 @@ class _RouteFormScreenState extends State<RouteFormScreen> {
       destination: (values['destination'] as String?) ?? '',
       distance: double.tryParse(values['distance']?.toString() ?? '') ?? 0.0,
       vehicleId: (values['vehicleId'] as int?) ?? 0,
-      estimatedTime: double.tryParse(values['estimatedTime']?.toString() ?? '') ?? 0.0,
+      estimatedTime:
+          double.tryParse(values['estimatedTime']?.toString() ?? '') ?? 0.0,
       status: (values['status'] as String?) ?? 'active',
       orderIds: _route?.orderIds ?? [],
     );
@@ -122,16 +124,8 @@ class _RouteFormScreenState extends State<RouteFormScreen> {
           label: 'Название маршрута',
           maxLength: 150,
         ),
-        FormFieldConfig(
-          key: 'origin',
-          label: 'Откуда',
-          maxLength: 100,
-        ),
-        FormFieldConfig(
-          key: 'destination',
-          label: 'Куда',
-          maxLength: 100,
-        ),
+        FormFieldConfig(key: 'origin', label: 'Откуда', maxLength: 100),
+        FormFieldConfig(key: 'destination', label: 'Куда', maxLength: 100),
         FormFieldConfig(
           key: 'distance',
           label: 'Расстояние (км)',
@@ -141,10 +135,14 @@ class _RouteFormScreenState extends State<RouteFormScreen> {
           key: 'vehicleId',
           label: 'Транспорт',
           type: FormFieldType.dropdown,
-          options: _vehicles.map((v) => DropdownMenuItem(
-            value: v.id,
-            child: Text('${v.plateNumber} - ${v.driverName}'),
-          )).toList(),
+          options: _vehicles
+              .map(
+                (v) => DropdownMenuItem(
+                  value: v.id,
+                  child: Text('${v.plateNumber} - ${v.driverName}'),
+                ),
+              )
+              .toList(),
         ),
         FormFieldConfig(
           key: 'estimatedTime',

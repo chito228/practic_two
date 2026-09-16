@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../utils/breakpoints.dart';
 
-/// Ограничивает ширину контента и центрирует его.
-/// На 1920px контент не растягивается на весь экран.
 class ContentContainer extends StatelessWidget {
   final Widget child;
   final double maxWidth;
@@ -20,10 +19,7 @@ class ContentContainer extends StatelessWidget {
     return Center(
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxWidth),
-        child: Padding(
-          padding: padding,
-          child: child,
-        ),
+        child: Padding(padding: padding, child: child),
       ),
     );
   }

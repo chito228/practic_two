@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+
 import '../models/role.dart';
 import '../state/auth_notifier.dart';
 import '../state/vehicle_list_notifier.dart';
@@ -83,9 +84,7 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
               },
             ),
           ),
-          Expanded(
-            child: _buildContent(notifier, auth),
-          ),
+          Expanded(child: _buildContent(notifier, auth)),
         ],
       ),
     );
@@ -107,14 +106,16 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
         final filteredItems = _searchQuery.isEmpty
             ? notifier.items
             : notifier.items
-                .where((v) =>
-                    v.plateNumber
-                        .toLowerCase()
-                        .contains(_searchQuery.toLowerCase()) ||
-                    v.driverName
-                        .toLowerCase()
-                        .contains(_searchQuery.toLowerCase()))
-                .toList();
+                  .where(
+                    (v) =>
+                        v.plateNumber.toLowerCase().contains(
+                          _searchQuery.toLowerCase(),
+                        ) ||
+                        v.driverName.toLowerCase().contains(
+                          _searchQuery.toLowerCase(),
+                        ),
+                  )
+                  .toList();
 
         if (filteredItems.isEmpty) {
           return const EmptyView(message: 'Нет транспорта');
@@ -146,8 +147,9 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
             items: items,
             idOf: (v) => v.id,
             selected: notifier.selected,
-            onToggleSelect:
-                auth.uiHas(Role.admin) ? notifier.toggleSelection : null,
+            onToggleSelect: auth.uiHas(Role.admin)
+                ? notifier.toggleSelection
+                : null,
             sortField: 'plateNumber',
             sortAscending: true,
             columns: [
@@ -238,7 +240,8 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Скрыть транспорт?'),
         content: const Text(
-            'Транспорт будет скрыт, но не удалён. Его можно будет восстановить.'),
+          'Транспорт будет скрыт, но не удалён. Его можно будет восстановить.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -252,12 +255,10 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
       ),
     );
     if (confirmed == true) {
-      final repository =
-          Provider.of<VehicleRepository>(context, listen: false);
+      final repository = Provider.of<VehicleRepository>(context, listen: false);
       await repository.softDelete(id);
       if (!context.mounted) return;
-      final notifier =
-          Provider.of<VehicleListNotifier>(context, listen: false);
+      final notifier = Provider.of<VehicleListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
@@ -284,16 +285,22 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
                 style: TextStyle(fontSize: 14),
               ),
               const SizedBox(height: 8),
-              ...routes.map((route) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2.0),
-                    child: Text('• ${route.name}',
-                        style: const TextStyle(fontSize: 14)),
-                  )),
+              ...routes.map(
+                (route) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2.0),
+                  child: Text(
+                    '• ${route.name}',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ),
+              ),
               const SizedBox(height: 12),
               Text(
                 'Количество маршрутов: ${routes.length}',
-                style:
-                    const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -331,25 +338,27 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить навсегда',
-                style: TextStyle(fontSize: 14, color: Colors.red)),
+            child: const Text(
+              'Удалить навсегда',
+              style: TextStyle(fontSize: 14, color: Colors.red),
+            ),
           ),
         ],
       ),
     );
     if (confirmed == true) {
-      final repository =
-          Provider.of<VehicleRepository>(context, listen: false);
+      final repository = Provider.of<VehicleRepository>(context, listen: false);
       await repository.hardDelete(id);
       if (!context.mounted) return;
-      final notifier =
-          Provider.of<VehicleListNotifier>(context, listen: false);
+      final notifier = Provider.of<VehicleListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
 
   Future<void> _confirmDelete(
-      BuildContext context, VehicleListNotifier notifier) async {
+    BuildContext context,
+    VehicleListNotifier notifier,
+  ) async {
     final routeRepo = Provider.of<RouteRepository>(context, listen: false);
     final vehiclesWithRoutes = <int>[];
 
@@ -390,7 +399,8 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Подтверждение удаления'),
         content: Text(
-            'Вы уверены, что хотите удалить ${notifier.selected.length} единиц транспорта?'),
+          'Вы уверены, что хотите удалить ${notifier.selected.length} единиц транспорта?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

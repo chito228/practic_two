@@ -78,10 +78,5 @@ class MockRoute {
   final Duration? delay;
   final DioExceptionType? error;
 
-  MockRoute({
-    required this.statusCode,
-    this.body,
-    this.delay,
-    this.error,
-  });
+  MockRoute({required this.statusCode, this.body, this.delay, this.error});
 }

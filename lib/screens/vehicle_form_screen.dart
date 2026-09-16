@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+
 import '../core/reference_cache.dart';
 import '../models/vehicle.dart';
 import '../repositories/vehicle_repository.dart';
@@ -87,7 +88,9 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
     }
 
     return GenericForm(
-      title: widget.isEditing ? 'Редактирование транспорта' : 'Создание транспорта',
+      title: widget.isEditing
+          ? 'Редактирование транспорта'
+          : 'Создание транспорта',
       isEditing: widget.isEditing,
       initialValues: {
         'plateNumber': _vehicle?.plateNumber ?? '',
@@ -101,11 +104,7 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
           label: 'Номер машины',
           maxLength: 20,
         ),
-        FormFieldConfig(
-          key: 'driverName',
-          label: 'Водитель',
-          maxLength: 150,
-        ),
+        FormFieldConfig(key: 'driverName', label: 'Водитель', maxLength: 150),
         FormFieldConfig(
           key: 'capacity',
           label: 'Грузоподъёмность (тонн)',
@@ -117,7 +116,10 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
           type: FormFieldType.dropdown,
           options: const [
             DropdownMenuItem(value: 'active', child: Text('В работе')),
-            DropdownMenuItem(value: 'maintenance', child: Text('На обслуживании')),
+            DropdownMenuItem(
+              value: 'maintenance',
+              child: Text('На обслуживании'),
+            ),
             DropdownMenuItem(value: 'repair', child: Text('В ремонте')),
           ],
         ),

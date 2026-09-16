@@ -37,24 +37,24 @@ class DriverLicense {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'number': number,
-        'issuedAt': issuedAt.toIso8601String(),
-        'expiresAt': expiresAt.toIso8601String(),
-        'vehicleId': vehicleId,
-        'deletedAt': deletedAt?.toIso8601String(),
-      };
+    'id': id,
+    'number': number,
+    'issuedAt': issuedAt.toIso8601String(),
+    'expiresAt': expiresAt.toIso8601String(),
+    'vehicleId': vehicleId,
+    'deletedAt': deletedAt?.toIso8601String(),
+  };
 
   factory DriverLicense.fromJson(Map<String, dynamic> json) => DriverLicense(
-        id: json['id'] as int? ?? 0,
-        number: json['number'] as String? ?? '',
-        issuedAt: DateTime.parse(json['issuedAt'] as String),
-        expiresAt: DateTime.parse(json['expiresAt'] as String),
-        vehicleId: json['vehicleId'] as int? ?? 0,
-        deletedAt: json['deletedAt'] == null
-            ? null
-            : DateTime.parse(json['deletedAt'] as String),
-      );
+    id: json['id'] as int? ?? 0,
+    number: json['number'] as String? ?? '',
+    issuedAt: DateTime.parse(json['issuedAt'] as String),
+    expiresAt: DateTime.parse(json['expiresAt'] as String),
+    vehicleId: json['vehicleId'] as int? ?? 0,
+    deletedAt: json['deletedAt'] == null
+        ? null
+        : DateTime.parse(json['deletedAt'] as String),
+  );
 }
 
 class Vehicle {
@@ -105,28 +105,28 @@ class Vehicle {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'plateNumber': plateNumber,
-        'driverName': driverName,
-        'capacity': capacity,
-        'status': status,
-        'driverLicense': driverLicense?.toJson(),
-        'routeIds': routeIds,
-        'deletedAt': deletedAt?.toIso8601String(),
-      };
+    'id': id,
+    'plateNumber': plateNumber,
+    'driverName': driverName,
+    'capacity': capacity,
+    'status': status,
+    'driverLicense': driverLicense?.toJson(),
+    'routeIds': routeIds,
+    'deletedAt': deletedAt?.toIso8601String(),
+  };
 
   factory Vehicle.fromJson(Map<String, dynamic> json) => Vehicle(
-        id: json['id'] as int? ?? 0,
-        plateNumber: json['plateNumber'] as String? ?? '',
-        driverName: json['driverName'] as String? ?? '',
-        capacity: (json['capacity'] as num?)?.toDouble() ?? 0.0,
-        status: json['status'] as String? ?? 'active',
-        driverLicense: json['driverLicense'] == null
-            ? null
-            : DriverLicense.fromJson(json['driverLicense'] as Map<String, dynamic>),
-        routeIds: (json['routeIds'] as List?)?.cast<int>() ?? [],
-        deletedAt: json['deletedAt'] == null
-            ? null
-            : DateTime.parse(json['deletedAt'] as String),
-      );
+    id: json['id'] as int? ?? 0,
+    plateNumber: json['plateNumber'] as String? ?? '',
+    driverName: json['driverName'] as String? ?? '',
+    capacity: (json['capacity'] as num?)?.toDouble() ?? 0.0,
+    status: json['status'] as String? ?? 'active',
+    driverLicense: json['driverLicense'] == null
+        ? null
+        : DriverLicense.fromJson(json['driverLicense'] as Map<String, dynamic>),
+    routeIds: (json['routeIds'] as List?)?.cast<int>() ?? [],
+    deletedAt: json['deletedAt'] == null
+        ? null
+        : DateTime.parse(json['deletedAt'] as String),
+  );
 }

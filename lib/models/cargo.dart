@@ -41,24 +41,24 @@ class Cargo {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'description': description,
-        'weightPerUnit': weightPerUnit,
-        'volumePerUnit': volumePerUnit,
-        'orderIds': orderIds,
-        'deletedAt': deletedAt?.toIso8601String(),
-      };
+    'id': id,
+    'name': name,
+    'description': description,
+    'weightPerUnit': weightPerUnit,
+    'volumePerUnit': volumePerUnit,
+    'orderIds': orderIds,
+    'deletedAt': deletedAt?.toIso8601String(),
+  };
 
   factory Cargo.fromJson(Map<String, dynamic> json) => Cargo(
-        id: json['id'] as int? ?? 0,
-        name: json['name'] as String? ?? '',
-        description: json['description'] as String?,
-        weightPerUnit: (json['weightPerUnit'] as num?)?.toDouble() ?? 0.0,
-        volumePerUnit: (json['volumePerUnit'] as num?)?.toDouble() ?? 0.0,
-        orderIds: (json['orderIds'] as List?)?.cast<int>() ?? [],
-        deletedAt: json['deletedAt'] == null
-            ? null
-            : DateTime.parse(json['deletedAt'] as String),
-      );
+    id: json['id'] as int? ?? 0,
+    name: json['name'] as String? ?? '',
+    description: json['description'] as String?,
+    weightPerUnit: (json['weightPerUnit'] as num?)?.toDouble() ?? 0.0,
+    volumePerUnit: (json['volumePerUnit'] as num?)?.toDouble() ?? 0.0,
+    orderIds: (json['orderIds'] as List?)?.cast<int>() ?? [],
+    deletedAt: json['deletedAt'] == null
+        ? null
+        : DateTime.parse(json['deletedAt'] as String),
+  );
 }

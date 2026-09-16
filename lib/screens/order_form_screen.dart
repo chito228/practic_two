@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+
 import '../core/reference_cache.dart';
 import '../models/order.dart';
 import '../models/client.dart';
@@ -138,10 +139,7 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         'deliveryDate': _order?.deliveryDate,
         'status': _order?.status ?? 'in_transit',
       },
-      optionsData: {
-        'cargoIds': _cargoList,
-        'routeIds': _routeList,
-      },
+      optionsData: {'cargoIds': _cargoList, 'routeIds': _routeList},
       fields: [
         FormFieldConfig(
           key: 'orderNumber',
@@ -152,10 +150,12 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
           key: 'clientId',
           label: 'Клиент',
           type: FormFieldType.dropdown,
-          options: _clients.map((c) => DropdownMenuItem(
-            value: c.id,
-            child: Text(c.companyName),
-          )).toList(),
+          options: _clients
+              .map(
+                (c) =>
+                    DropdownMenuItem(value: c.id, child: Text(c.companyName)),
+              )
+              .toList(),
         ),
         FormFieldConfig(
           key: 'cargoIds',

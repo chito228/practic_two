@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 
-/// Точки перехода для адаптивной вёрстки.
 class Breakpoints {
   static const double mobile = 360;
   static const double tablet = 768;
   static const double desktop = 1280;
   static const double wide = 1920;
 
-  /// Максимальная ширина контента на широких экранах.
   static const double maxContentWidth = 1200;
 
   static bool isMobile(BuildContext context) =>

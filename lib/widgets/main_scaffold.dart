@@ -28,20 +28,29 @@ List<MainNavItem> navItemsFor(AuthNotifier auth) {
       ),
     const MainNavItem(icon: Icons.people, label: 'Клиенты', route: '/clients'),
     const MainNavItem(
-        icon: Icons.receipt_long, label: 'Заказы', route: '/orders'),
-    const MainNavItem(
-        icon: Icons.inventory_2, label: 'Грузы', route: '/cargo'),
+      icon: Icons.receipt_long,
+      label: 'Заказы',
+      route: '/orders',
+    ),
+    const MainNavItem(icon: Icons.inventory_2, label: 'Грузы', route: '/cargo'),
     const MainNavItem(icon: Icons.route, label: 'Маршруты', route: '/routes'),
     const MainNavItem(
-        icon: Icons.local_shipping, label: 'Транспорт', route: '/vehicles'),
+      icon: Icons.local_shipping,
+      label: 'Транспорт',
+      route: '/vehicles',
+    ),
     if (auth.hasExactly(Role.manager))
       const MainNavItem(
-          icon: Icons.bar_chart, label: 'Статистика', route: '/stats'),
+        icon: Icons.bar_chart,
+        label: 'Статистика',
+        route: '/stats',
+      ),
     if (auth.hasExactly(Role.admin))
       const MainNavItem(
-          icon: Icons.manage_accounts,
-          label: 'Пользователи',
-          route: '/users'),
+        icon: Icons.manage_accounts,
+        label: 'Пользователи',
+        route: '/users',
+      ),
   ];
 }
 

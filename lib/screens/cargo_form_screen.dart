@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+
 import '../core/reference_cache.dart';
 import '../models/cargo.dart';
 import '../repositories/cargo_repository.dart';
@@ -55,8 +56,10 @@ class _CargoFormScreenState extends State<CargoFormScreen> {
       id: _cargo?.id ?? 0,
       name: (values['name'] as String?) ?? '',
       description: desc.isEmpty ? null : desc,
-      weightPerUnit: double.tryParse(values['weightPerUnit']?.toString() ?? '') ?? 0.0,
-      volumePerUnit: double.tryParse(values['volumePerUnit']?.toString() ?? '') ?? 0.0,
+      weightPerUnit:
+          double.tryParse(values['weightPerUnit']?.toString() ?? '') ?? 0.0,
+      volumePerUnit:
+          double.tryParse(values['volumePerUnit']?.toString() ?? '') ?? 0.0,
       orderIds: _cargo?.orderIds ?? [],
     );
 
@@ -97,11 +100,7 @@ class _CargoFormScreenState extends State<CargoFormScreen> {
         'volumePerUnit': _cargo?.volumePerUnit.toString() ?? '0',
       },
       fields: [
-        FormFieldConfig(
-          key: 'name',
-          label: 'Название груза',
-          maxLength: 100,
-        ),
+        FormFieldConfig(key: 'name', label: 'Название груза', maxLength: 100),
         FormFieldConfig(
           key: 'description',
           label: 'Описание',

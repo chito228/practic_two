@@ -131,11 +131,12 @@ class _GenericFormState extends State<GenericForm> {
                                     width: 20,
                                     height: 20,
                                     child: CircularProgressIndicator(
-                                        strokeWidth: 2),
+                                      strokeWidth: 2,
+                                    ),
                                   )
-                                : Text(widget.isEditing
-                                    ? 'Сохранить'
-                                    : 'Создать'),
+                                : Text(
+                                    widget.isEditing ? 'Сохранить' : 'Создать',
+                                  ),
                           ),
                         ],
                       ),
@@ -304,8 +305,8 @@ class _GenericFormState extends State<GenericForm> {
             key: ValueKey('${config.key}_${value?.toString()}'),
             initialValue: value != null
                 ? (value is DateTime
-                    ? value.toLocal().toString().split(' ')[0]
-                    : value.toString())
+                      ? value.toLocal().toString().split(' ')[0]
+                      : value.toString())
                 : null,
             decoration: InputDecoration(
               labelText: config.label,
@@ -335,7 +336,9 @@ class _GenericFormState extends State<GenericForm> {
         // Сначала серверная ошибка, потом клиентская.
         final serverError = _serverErrors[config.key];
         if (serverError != null) return serverError;
-        return (value?.isEmpty ?? true) ? 'Выберите хотя бы один элемент' : null;
+        return (value?.isEmpty ?? true)
+            ? 'Выберите хотя бы один элемент'
+            : null;
       },
       builder: (field) {
         return InputDecorator(
@@ -357,7 +360,8 @@ class _GenericFormState extends State<GenericForm> {
                   runSpacing: 8,
                   children: items.map((item) {
                     final id = (item as dynamic).id as int;
-                    final name = (item as dynamic).name?.toString() ??
+                    final name =
+                        (item as dynamic).name?.toString() ??
                         (item as dynamic).fullName?.toString() ??
                         (item as dynamic).companyName?.toString() ??
                         (item as dynamic).plateNumber?.toString() ??
@@ -462,7 +466,8 @@ class _GenericFormState extends State<GenericForm> {
           builder: (context) => AlertDialog(
             title: const Text('Несохранённые изменения'),
             content: const Text(
-                'У вас есть несохранённые изменения. Вы уверены, что хотите выйти?'),
+              'У вас есть несохранённые изменения. Вы уверены, что хотите выйти?',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
@@ -492,9 +497,9 @@ class _GenericFormState extends State<GenericForm> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(widget.isEditing
-                ? 'Запись обновлена'
-                : 'Запись создана'),
+            content: Text(
+              widget.isEditing ? 'Запись обновлена' : 'Запись создана',
+            ),
           ),
         );
       }
@@ -508,23 +513,20 @@ class _GenericFormState extends State<GenericForm> {
     } on ConflictException catch (e) {
       // 409: показываем snackbar с текстом от сервера.
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
       }
     } on ApiException catch (e) {
       // Прочие доменные ошибки (Network, Forbidden, NotFound, Server).
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
       }
     } catch (e) {
       // На всякий случай — неизвестная ошибка.
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
       }
     } finally {
       if (mounted) {

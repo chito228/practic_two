@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+
 import '../core/api_exceptions.dart';
 import '../models/role.dart';
 import '../repositories/client_repository.dart';
@@ -46,7 +47,10 @@ class ClientDetailScreen extends StatelessWidget {
                 _infoRow('Телефон', client.phone),
                 _infoRow('Email', client.email),
                 if (client.address != null) _infoRow('Адрес', client.address!),
-                _infoRow('Количество заказов', client.orderIds.length.toString()),
+                _infoRow(
+                  'Количество заказов',
+                  client.orderIds.length.toString(),
+                ),
                 if (client.isDeleted)
                   _infoRow('Статус', 'Скрыт', color: Colors.orange),
                 const Spacer(),
@@ -128,7 +132,9 @@ class ClientDetailScreen extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Скрыть клиента?'),
-        content: const Text('Клиент будет скрыт, но не удалён. Его можно будет восстановить.'),
+        content: const Text(
+          'Клиент будет скрыт, но не удалён. Его можно будет восстановить.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -175,9 +181,8 @@ class ClientDetailScreen extends StatelessWidget {
     await notifier.load();
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Клиент скрыт')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Клиент скрыт')));
     context.go('/clients');
   }
 
@@ -188,9 +193,8 @@ class ClientDetailScreen extends StatelessWidget {
       orders = await orderRepo.findByClientId(id);
     } on ApiException catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
       }
       return;
     }
@@ -213,17 +217,22 @@ class ClientDetailScreen extends StatelessWidget {
                 style: TextStyle(fontSize: 14),
               ),
               const SizedBox(height: 8),
-              ...orders.map((order) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2.0),
-                    child: Text(
-                      '• Заказ #${order.orderNumber} (${order.cargoDescription})',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                  )),
+              ...orders.map(
+                (order) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2.0),
+                  child: Text(
+                    '• Заказ #${order.orderNumber} (${order.cargoDescription})',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ),
+              ),
               const SizedBox(height: 12),
               Text(
                 'Количество заказов: ${orders.length}',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
@@ -360,9 +369,8 @@ class ClientDetailScreen extends StatelessWidget {
     await notifier.load();
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Клиент восстановлен')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Клиент восстановлен')));
     context.go('/clients');
   }
 }

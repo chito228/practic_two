@@ -33,7 +33,7 @@ class AuthNotifier extends ChangeNotifier {
   /// Максимальная длительность сессии. По умолчанию — 60 минут.
   /// ИЗМЕНЕНИЕ: было seconds: 90, исправлено на minutes: 60 в соответствии с комментарием.
   Duration maxSessionDuration = const Duration(minutes: 60);
-  
+
   AppUser? get user => _user;
   String? get accessToken => _accessToken;
   String? get refreshToken => _refreshToken;
@@ -71,8 +71,10 @@ class AuthNotifier extends ChangeNotifier {
   /// В обычном режиме — из токена (user.role).
   /// В debug-режиме (--dart-define=DEBUG_KEEP_ROLE=true) — из localStorage.
   Role? get effectiveRole {
-    const debugKeepRole =
-        bool.fromEnvironment('DEBUG_KEEP_ROLE', defaultValue: false);
+    const debugKeepRole = bool.fromEnvironment(
+      'DEBUG_KEEP_ROLE',
+      defaultValue: false,
+    );
     if (debugKeepRole) {
       final stored = storedRole;
       if (stored != null) return stored;
@@ -200,8 +202,10 @@ class AuthNotifier extends ChangeNotifier {
     final role = _user?.role;
     if (role == null) return;
 
-    const debugKeepRole =
-        bool.fromEnvironment('DEBUG_KEEP_ROLE', defaultValue: false);
+    const debugKeepRole = bool.fromEnvironment(
+      'DEBUG_KEEP_ROLE',
+      defaultValue: false,
+    );
     if (debugKeepRole && _prefs.getString(_kRole) != null) {
       return;
     }

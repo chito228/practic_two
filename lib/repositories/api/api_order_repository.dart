@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+
 import '../../core/api_exceptions.dart';
 import '../../models/order.dart';
 import '../../models/client.dart';
@@ -75,10 +76,7 @@ class ApiOrderRepository implements OrderRepository {
   }
 
   @override
-  Future<PageResult<Order>> find(
-    OrderQuery query, {
-    CancelToken? cancelToken,
-  }) {
+  Future<PageResult<Order>> find(OrderQuery query, {CancelToken? cancelToken}) {
     return guard(() async {
       final response = await _dio.get<Map<String, dynamic>>(
         '/orders',
@@ -170,10 +168,7 @@ class ApiOrderRepository implements OrderRepository {
     return guard(() async {
       final response = await _dio.get<Map<String, dynamic>>(
         '/orders',
-        queryParameters: {
-          'clientId': clientId,
-          'size': 100,
-        },
+        queryParameters: {'clientId': clientId, 'size': 100},
       );
       final data = response.data!;
       return (data['items'] as List? ?? [])
@@ -184,15 +179,15 @@ class ApiOrderRepository implements OrderRepository {
   }
 
   Map<String, dynamic> _toApiJson(Order item) => {
-        'orderNumber': item.orderNumber,
-        'clientId': item.clientId,
-        'cargoIds': item.cargoIds,
-        'routeIds': item.routeIds,
-        'cargoDescription': item.cargoDescription,
-        'weight': item.weight,
-        'volume': item.volume,
-        'shippingDate': item.shippingDate.toIso8601String(),
-        'deliveryDate': item.deliveryDate?.toIso8601String(),
-        'status': item.status,
-      };
+    'orderNumber': item.orderNumber,
+    'clientId': item.clientId,
+    'cargoIds': item.cargoIds,
+    'routeIds': item.routeIds,
+    'cargoDescription': item.cargoDescription,
+    'weight': item.weight,
+    'volume': item.volume,
+    'shippingDate': item.shippingDate.toIso8601String(),
+    'deliveryDate': item.deliveryDate?.toIso8601String(),
+    'status': item.status,
+  };
 }

@@ -4,17 +4,12 @@ import 'package:go_router/go_router.dart';
 class NotFoundScreen extends StatelessWidget {
   final String location;
 
-  const NotFoundScreen({
-    super.key,
-    required this.location,
-  });
+  const NotFoundScreen({super.key, required this.location});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Страница не найдена'),
-      ),
+      appBar: AppBar(title: const Text('Страница не найдена')),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
@@ -25,10 +20,7 @@ class NotFoundScreen extends StatelessWidget {
               children: [
                 const Text(
                   '404 Страница не найдена',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),

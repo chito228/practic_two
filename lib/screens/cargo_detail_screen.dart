@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+
 import '../core/api_exceptions.dart';
 import '../models/role.dart';
 import '../repositories/cargo_repository.dart';
@@ -47,7 +48,10 @@ class CargoDetailScreen extends StatelessWidget {
                     _infoRow('Описание', cargo.description!),
                   _infoRow('Вес за единицу', '${cargo.weightPerUnit} кг'),
                   _infoRow('Объём за единицу', '${cargo.volumePerUnit} м³'),
-                  _infoRow('Количество заказов', cargo.orderIds.length.toString()),
+                  _infoRow(
+                    'Количество заказов',
+                    cargo.orderIds.length.toString(),
+                  ),
                   if (cargo.isDeleted)
                     _infoRow('Статус', 'Скрыт', color: Colors.orange),
                   const SizedBox(height: 32),
@@ -64,7 +68,8 @@ class CargoDetailScreen extends StatelessWidget {
                       // Редактирование груза — только admin.
                       if (auth.uiHas(Role.admin))
                         ElevatedButton(
-                          onPressed: () => context.go('/cargo/${cargo.id}/edit'),
+                          onPressed: () =>
+                              context.go('/cargo/${cargo.id}/edit'),
                           child: const Text('Редактировать'),
                         ),
 
@@ -131,7 +136,9 @@ class CargoDetailScreen extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Скрыть груз?'),
-        content: const Text('Груз будет скрыт, но не удалён. Его можно будет восстановить.'),
+        content: const Text(
+          'Груз будет скрыт, но не удалён. Его можно будет восстановить.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -178,9 +185,8 @@ class CargoDetailScreen extends StatelessWidget {
     await notifier.load();
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Груз скрыт')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Груз скрыт')));
     context.go('/cargo');
   }
 
@@ -192,16 +198,16 @@ class CargoDetailScreen extends StatelessWidget {
       allOrders = await orderRepo.findAll(includeDeleted: true);
     } on ApiException catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
       }
       return;
     }
     if (!context.mounted) return;
 
-    final relatedOrders =
-        allOrders.where((o) => o.cargoIds.contains(id) && !o.isDeleted).toList();
+    final relatedOrders = allOrders
+        .where((o) => o.cargoIds.contains(id) && !o.isDeleted)
+        .toList();
 
     if (relatedOrders.isNotEmpty) {
       await showDialog(
@@ -220,17 +226,22 @@ class CargoDetailScreen extends StatelessWidget {
                 style: TextStyle(fontSize: 14),
               ),
               const SizedBox(height: 8),
-              ...relatedOrders.map((order) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2.0),
-                    child: Text(
-                      '• Заказ #${order.orderNumber} (${order.cargoDescription})',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                  )),
+              ...relatedOrders.map(
+                (order) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2.0),
+                  child: Text(
+                    '• Заказ #${order.orderNumber} (${order.cargoDescription})',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ),
+              ),
               const SizedBox(height: 12),
               Text(
                 'Количество заказов: ${relatedOrders.length}',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -310,9 +321,8 @@ class CargoDetailScreen extends StatelessWidget {
     await notifier.load();
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Груз удалён навсегда')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Груз удалён навсегда')));
     context.go('/cargo');
   }
 
@@ -368,9 +378,8 @@ class CargoDetailScreen extends StatelessWidget {
     await notifier.load();
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Груз восстановлен')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Груз восстановлен')));
     context.go('/cargo');
   }
 }

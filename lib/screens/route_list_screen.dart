@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+
 import '../models/role.dart';
 import '../state/auth_notifier.dart';
 import '../state/route_list_notifier.dart';
@@ -83,9 +84,7 @@ class _RouteListScreenState extends State<RouteListScreen> {
               },
             ),
           ),
-          Expanded(
-            child: _buildContent(notifier, auth),
-          ),
+          Expanded(child: _buildContent(notifier, auth)),
         ],
       ),
     );
@@ -107,17 +106,19 @@ class _RouteListScreenState extends State<RouteListScreen> {
         final filteredItems = _searchQuery.isEmpty
             ? notifier.items
             : notifier.items
-                .where((r) =>
-                    r.name
-                        .toLowerCase()
-                        .contains(_searchQuery.toLowerCase()) ||
-                    r.origin
-                        .toLowerCase()
-                        .contains(_searchQuery.toLowerCase()) ||
-                    r.destination
-                        .toLowerCase()
-                        .contains(_searchQuery.toLowerCase()))
-                .toList();
+                  .where(
+                    (r) =>
+                        r.name.toLowerCase().contains(
+                          _searchQuery.toLowerCase(),
+                        ) ||
+                        r.origin.toLowerCase().contains(
+                          _searchQuery.toLowerCase(),
+                        ) ||
+                        r.destination.toLowerCase().contains(
+                          _searchQuery.toLowerCase(),
+                        ),
+                  )
+                  .toList();
 
         if (filteredItems.isEmpty) {
           return const EmptyView(message: 'Нет маршрутов');
@@ -239,7 +240,8 @@ class _RouteListScreenState extends State<RouteListScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Скрыть маршрут?'),
         content: const Text(
-            'Маршрут будет скрыт, но не удалён. Его можно будет восстановить.'),
+          'Маршрут будет скрыт, но не удалён. Его можно будет восстановить.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -253,12 +255,10 @@ class _RouteListScreenState extends State<RouteListScreen> {
       ),
     );
     if (confirmed == true) {
-      final repository =
-          Provider.of<RouteRepository>(context, listen: false);
+      final repository = Provider.of<RouteRepository>(context, listen: false);
       await repository.softDelete(id);
       if (!context.mounted) return;
-      final notifier =
-          Provider.of<RouteListNotifier>(context, listen: false);
+      final notifier = Provider.of<RouteListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
@@ -266,8 +266,9 @@ class _RouteListScreenState extends State<RouteListScreen> {
   Future<void> _hardDelete(BuildContext context, int id) async {
     final orderRepo = Provider.of<OrderRepository>(context, listen: false);
     final allOrders = await orderRepo.findAll(includeDeleted: true);
-    final relatedOrders =
-        allOrders.where((o) => o.routeIds.contains(id) && !o.isDeleted).toList();
+    final relatedOrders = allOrders
+        .where((o) => o.routeIds.contains(id) && !o.isDeleted)
+        .toList();
     if (!context.mounted) return;
 
     if (relatedOrders.isNotEmpty) {
@@ -287,18 +288,22 @@ class _RouteListScreenState extends State<RouteListScreen> {
                 style: TextStyle(fontSize: 14),
               ),
               const SizedBox(height: 8),
-              ...relatedOrders.map((order) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2.0),
-                    child: Text(
-                      '• Заказ #${order.orderNumber} (${order.cargoDescription})',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                  )),
+              ...relatedOrders.map(
+                (order) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2.0),
+                  child: Text(
+                    '• Заказ #${order.orderNumber} (${order.cargoDescription})',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ),
+              ),
               const SizedBox(height: 12),
               Text(
                 'Количество заказов: ${relatedOrders.length}',
-                style:
-                    const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -336,32 +341,35 @@ class _RouteListScreenState extends State<RouteListScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить навсегда',
-                style: TextStyle(fontSize: 14, color: Colors.red)),
+            child: const Text(
+              'Удалить навсегда',
+              style: TextStyle(fontSize: 14, color: Colors.red),
+            ),
           ),
         ],
       ),
     );
     if (confirmed == true) {
-      final repository =
-          Provider.of<RouteRepository>(context, listen: false);
+      final repository = Provider.of<RouteRepository>(context, listen: false);
       await repository.hardDelete(id);
       if (!context.mounted) return;
-      final notifier =
-          Provider.of<RouteListNotifier>(context, listen: false);
+      final notifier = Provider.of<RouteListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
 
   Future<void> _confirmDelete(
-      BuildContext context, RouteListNotifier notifier) async {
+    BuildContext context,
+    RouteListNotifier notifier,
+  ) async {
     final orderRepo = Provider.of<OrderRepository>(context, listen: false);
     final allOrders = await orderRepo.findAll(includeDeleted: true);
     final routesWithOrders = <int>[];
 
     for (final id in notifier.selected) {
-      final relatedOrders =
-          allOrders.where((o) => o.routeIds.contains(id) && !o.isDeleted);
+      final relatedOrders = allOrders.where(
+        (o) => o.routeIds.contains(id) && !o.isDeleted,
+      );
       if (relatedOrders.isNotEmpty) {
         routesWithOrders.add(id);
       }
@@ -397,7 +405,8 @@ class _RouteListScreenState extends State<RouteListScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Подтверждение удаления'),
         content: Text(
-            'Вы уверены, что хотите удалить ${notifier.selected.length} маршрутов?'),
+          'Вы уверены, что хотите удалить ${notifier.selected.length} маршрутов?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

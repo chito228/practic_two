@@ -17,40 +17,40 @@ class PersistentRouteRepository extends BaseRepository<Route>
 
   @override
   List<Route> seedData() => [
-        Route(
-          id: 1,
-          name: 'Москва-Санкт-Петербург',
-          origin: 'Москва',
-          destination: 'Санкт-Петербург',
-          distance: 700.0,
-          vehicleId: 1,
-          estimatedTime: 8.0,
-          status: 'active',
-          orderIds: [1, 3],
-        ),
-        Route(
-          id: 2,
-          name: 'Москва-Казань',
-          origin: 'Москва',
-          destination: 'Казань',
-          distance: 800.0,
-          vehicleId: 2,
-          estimatedTime: 10.0,
-          status: 'active',
-          orderIds: [2, 5],
-        ),
-        Route(
-          id: 3,
-          name: 'Санкт-Петербург-Казань',
-          origin: 'Санкт-Петербург',
-          destination: 'Казань',
-          distance: 1200.0,
-          vehicleId: 1,
-          estimatedTime: 15.0,
-          status: 'completed',
-          orderIds: [4],
-        ),
-      ];
+    Route(
+      id: 1,
+      name: 'Москва-Санкт-Петербург',
+      origin: 'Москва',
+      destination: 'Санкт-Петербург',
+      distance: 700.0,
+      vehicleId: 1,
+      estimatedTime: 8.0,
+      status: 'active',
+      orderIds: [1, 3],
+    ),
+    Route(
+      id: 2,
+      name: 'Москва-Казань',
+      origin: 'Москва',
+      destination: 'Казань',
+      distance: 800.0,
+      vehicleId: 2,
+      estimatedTime: 10.0,
+      status: 'active',
+      orderIds: [2, 5],
+    ),
+    Route(
+      id: 3,
+      name: 'Санкт-Петербург-Казань',
+      origin: 'Санкт-Петербург',
+      destination: 'Казань',
+      distance: 1200.0,
+      vehicleId: 1,
+      estimatedTime: 15.0,
+      status: 'completed',
+      orderIds: [4],
+    ),
+  ];
 
   @override
   Route createCopyWithNewId(Route item, int newId) {

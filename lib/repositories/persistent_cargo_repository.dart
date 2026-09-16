@@ -17,31 +17,31 @@ class PersistentCargoRepository extends BaseRepository<Cargo>
 
   @override
   List<Cargo> seedData() => [
-        Cargo(
-          id: 1,
-          name: 'Строительные материалы',
-          description: 'Кирпич, цемент, песок',
-          weightPerUnit: 50.0,
-          volumePerUnit: 0.1,
-          orderIds: [1, 4],
-        ),
-        Cargo(
-          id: 2,
-          name: 'Электроника',
-          description: 'Смартфоны, ноутбуки',
-          weightPerUnit: 0.5,
-          volumePerUnit: 0.01,
-          orderIds: [2, 4],
-        ),
-        Cargo(
-          id: 3,
-          name: 'Мебель',
-          description: 'Столы, стулья, шкафы',
-          weightPerUnit: 25.0,
-          volumePerUnit: 0.5,
-          orderIds: [3, 5],
-        ),
-      ];
+    Cargo(
+      id: 1,
+      name: 'Строительные материалы',
+      description: 'Кирпич, цемент, песок',
+      weightPerUnit: 50.0,
+      volumePerUnit: 0.1,
+      orderIds: [1, 4],
+    ),
+    Cargo(
+      id: 2,
+      name: 'Электроника',
+      description: 'Смартфоны, ноутбуки',
+      weightPerUnit: 0.5,
+      volumePerUnit: 0.01,
+      orderIds: [2, 4],
+    ),
+    Cargo(
+      id: 3,
+      name: 'Мебель',
+      description: 'Столы, стулья, шкафы',
+      weightPerUnit: 25.0,
+      volumePerUnit: 0.5,
+      orderIds: [3, 5],
+    ),
+  ];
 
   @override
   Cargo createCopyWithNewId(Cargo item, int newId) {

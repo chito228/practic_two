@@ -95,10 +95,10 @@ class _StatsScreenState extends State<StatsScreen> {
       (s, r) => s + (r.distance as num).toDouble(),
     );
 
-    final activeVehicles =
-        _vehicles.where((v) => v.status == 'active').length;
-    final maintenanceVehicles =
-        _vehicles.where((v) => v.status == 'maintenance').length;
+    final activeVehicles = _vehicles.where((v) => v.status == 'active').length;
+    final maintenanceVehicles = _vehicles
+        .where((v) => v.status == 'maintenance')
+        .length;
     final repairVehicles = _vehicles.where((v) => v.status == 'repair').length;
 
     // Топ клиентов.
@@ -141,12 +141,10 @@ class _StatsScreenState extends State<StatsScreen> {
             )
           else
             ...top5.map((entry) {
-              final client = _clients
-                  .cast<dynamic>()
-                  .firstWhere(
-                    (c) => c.id == entry.key,
-                    orElse: () => null,
-                  );
+              final client = _clients.cast<dynamic>().firstWhere(
+                (c) => c.id == entry.key,
+                orElse: () => null,
+              );
               final name = client?.companyName ?? 'Клиент #${entry.key}';
               return _row(name, entry.value.toString());
             }),
@@ -179,10 +177,7 @@ class _StatsScreenState extends State<StatsScreen> {
           // выстраиваются в одну колонку слева.
           SizedBox(
             width: 220,
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 15),
-            ),
+            child: Text(label, style: const TextStyle(fontSize: 15)),
           ),
           Text(
             value,

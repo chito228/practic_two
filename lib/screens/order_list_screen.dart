@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+
 import '../core/reference_cache.dart';
 import '../models/role.dart';
 import '../state/auth_notifier.dart';
@@ -106,10 +107,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                   value: notifier.query.includeDeleted,
                   onChanged: (value) {
                     notifier.applyQuery(
-                      notifier.query.copyWith(
-                        includeDeleted: value,
-                        page: 1,
-                      ),
+                      notifier.query.copyWith(includeDeleted: value, page: 1),
                     );
                   },
                 ),
@@ -144,11 +142,17 @@ class _OrderListScreenState extends State<OrderListScreen> {
               items: [
                 const DropdownMenuItem(value: null, child: Text('Все статусы')),
                 const DropdownMenuItem(
-                    value: 'in_transit', child: Text('В пути')),
+                  value: 'in_transit',
+                  child: Text('В пути'),
+                ),
                 const DropdownMenuItem(
-                    value: 'delivered', child: Text('Доставлено')),
+                  value: 'delivered',
+                  child: Text('Доставлено'),
+                ),
                 const DropdownMenuItem(
-                    value: 'cancelled', child: Text('Отменено')),
+                  value: 'cancelled',
+                  child: Text('Отменено'),
+                ),
               ],
               onChanged: (value) {
                 notifier.applyQuery(
@@ -159,8 +163,10 @@ class _OrderListScreenState extends State<OrderListScreen> {
           ),
           if (notifier.query.hasFilters)
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 8.0,
+              ),
               child: Wrap(
                 spacing: 8,
                 children: [
@@ -168,18 +174,23 @@ class _OrderListScreenState extends State<OrderListScreen> {
                     ActionChip(
                       label: Text('Поиск: ${notifier.query.search}'),
                       onPressed: () {
-                        final newQuery =
-                            notifier.query.copyWith(search: '', page: 1);
+                        final newQuery = notifier.query.copyWith(
+                          search: '',
+                          page: 1,
+                        );
                         notifier.applyQuery(newQuery);
                       },
                     ),
                   if (notifier.query.status != null)
                     ActionChip(
                       label: Text(
-                          'Статус: ${_getStatusText(notifier.query.status!)}'),
+                        'Статус: ${_getStatusText(notifier.query.status!)}',
+                      ),
                       onPressed: () {
-                        final newQuery =
-                            notifier.query.copyWith(status: null, page: 1);
+                        final newQuery = notifier.query.copyWith(
+                          status: null,
+                          page: 1,
+                        );
                         notifier.applyQuery(newQuery);
                       },
                     ),
@@ -187,8 +198,10 @@ class _OrderListScreenState extends State<OrderListScreen> {
                     ActionChip(
                       label: const Text('Показаны удалённые'),
                       onPressed: () {
-                        final newQuery = notifier.query
-                            .copyWith(includeDeleted: false, page: 1);
+                        final newQuery = notifier.query.copyWith(
+                          includeDeleted: false,
+                          page: 1,
+                        );
                         notifier.applyQuery(newQuery);
                       },
                     ),
@@ -202,9 +215,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 ],
               ),
             ),
-          Expanded(
-            child: _buildContent(notifier, auth),
-          ),
+          Expanded(child: _buildContent(notifier, auth)),
           if (notifier.status == LoadStatus.success &&
               notifier.result.total > 0)
             Padding(
@@ -215,9 +226,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 totalItems: notifier.result.total,
                 pageSize: notifier.query.size,
                 onPageChanged: (page) {
-                  notifier.applyQuery(
-                    notifier.query.copyWith(page: page),
-                  );
+                  notifier.applyQuery(notifier.query.copyWith(page: page));
                 },
                 onSizeChanged: (size) {
                   notifier.applyQuery(
@@ -375,7 +384,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Скрыть заказ?'),
         content: const Text(
-            'Заказ будет скрыт, но не удалён. Его можно будет восстановить.'),
+          'Заказ будет скрыт, но не удалён. Его можно будет восстановить.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -389,12 +399,10 @@ class _OrderListScreenState extends State<OrderListScreen> {
       ),
     );
     if (confirmed == true) {
-      final repository =
-          Provider.of<OrderRepository>(context, listen: false);
+      final repository = Provider.of<OrderRepository>(context, listen: false);
       await repository.softDelete(id);
       if (!context.mounted) return;
-      final notifier =
-          Provider.of<OrderListNotifier>(context, listen: false);
+      final notifier = Provider.of<OrderListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
@@ -452,16 +460,19 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 style: TextStyle(fontSize: 14),
               ),
               const SizedBox(height: 8),
-              ...related.map((item) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2.0),
-                    child:
-                        Text(item, style: const TextStyle(fontSize: 14)),
-                  )),
+              ...related.map(
+                (item) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2.0),
+                  child: Text(item, style: const TextStyle(fontSize: 14)),
+                ),
+              ),
               const SizedBox(height: 12),
               Text(
                 'Количество связанных записей: ${related.length}',
-                style:
-                    const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -499,25 +510,27 @@ class _OrderListScreenState extends State<OrderListScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить навсегда',
-                style: TextStyle(fontSize: 14, color: Colors.red)),
+            child: const Text(
+              'Удалить навсегда',
+              style: TextStyle(fontSize: 14, color: Colors.red),
+            ),
           ),
         ],
       ),
     );
     if (confirmed == true) {
-      final repository =
-          Provider.of<OrderRepository>(context, listen: false);
+      final repository = Provider.of<OrderRepository>(context, listen: false);
       await repository.hardDelete(id);
       if (!context.mounted) return;
-      final notifier =
-          Provider.of<OrderListNotifier>(context, listen: false);
+      final notifier = Provider.of<OrderListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
 
   Future<void> _confirmDelete(
-      BuildContext context, OrderListNotifier notifier) async {
+    BuildContext context,
+    OrderListNotifier notifier,
+  ) async {
     final orderRepo = Provider.of<OrderRepository>(context, listen: false);
     final ordersWithRelations = <int>[];
 
@@ -561,7 +574,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Подтверждение удаления'),
         content: Text(
-            'Вы уверены, что хотите удалить ${notifier.selected.length} заказов?'),
+          'Вы уверены, что хотите удалить ${notifier.selected.length} заказов?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

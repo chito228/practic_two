@@ -51,10 +51,12 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
       final adapter = MockAdapter();
-      final dio = Dio(BaseOptions(
-        baseUrl: 'http://localhost:8080/api',
-        validateStatus: (s) => s != null && s < 500,
-      ));
+      final dio = Dio(
+        BaseOptions(
+          baseUrl: 'http://localhost:8080/api',
+          validateStatus: (s) => s != null && s < 500,
+        ),
+      );
       dio.httpClientAdapter = adapter;
       final api = AuthApi(dio);
       auth = AuthNotifier(prefs, api);
@@ -98,10 +100,12 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
       final adapter = MockAdapter();
-      final dio = Dio(BaseOptions(
-        baseUrl: 'http://localhost:8080/api',
-        validateStatus: (s) => s != null && s < 500,
-      ));
+      final dio = Dio(
+        BaseOptions(
+          baseUrl: 'http://localhost:8080/api',
+          validateStatus: (s) => s != null && s < 500,
+        ),
+      );
       dio.httpClientAdapter = adapter;
       final api = AuthApi(dio);
       auth = AuthNotifier(prefs, api);
@@ -136,10 +140,12 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     final adapter = MockAdapter();
-    final dio = Dio(BaseOptions(
-      baseUrl: 'http://localhost:8080/api',
-      validateStatus: (s) => s != null && s < 500,
-    ));
+    final dio = Dio(
+      BaseOptions(
+        baseUrl: 'http://localhost:8080/api',
+        validateStatus: (s) => s != null && s < 500,
+      ),
+    );
     dio.httpClientAdapter = adapter;
     final api = AuthApi(dio);
     final auth = AuthNotifier(prefs, api);
@@ -156,9 +162,9 @@ void main() {
 // ─────────────────────────────────────────────
 
 AppUser _user(String username, Role role) => AppUser(
-      id: 1,
-      username: username,
-      fullName: username,
-      email: '$username@test.local',
-      role: role,
-    );
+  id: 1,
+  username: username,
+  fullName: username,
+  email: '$username@test.local',
+  role: role,
+);

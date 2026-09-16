@@ -56,9 +56,8 @@ void buildRouter(AuthNotifier auth) {
       // ─── Публичные маршруты ──────────────────────────
       GoRoute(
         path: '/login',
-        builder: (context, state) => LoginScreen(
-          from: state.uri.queryParameters['from'],
-        ),
+        builder: (context, state) =>
+            LoginScreen(from: state.uri.queryParameters['from']),
       ),
       GoRoute(
         path: '/register',
@@ -70,10 +69,7 @@ void buildRouter(AuthNotifier auth) {
       ),
 
       // ─── Главная ─────────────────────────────────────
-      GoRoute(
-        path: '/',
-        builder: (context, state) => const HomeScreen(),
-      ),
+      GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
 
       // ─── Статистика (только manager) ─────────────────
       GoRoute(
@@ -247,8 +243,7 @@ void buildRouter(AuthNotifier auth) {
       ),
     ],
 
-    errorBuilder: (context, state) => NotFoundScreen(
-      location: state.uri.toString(),
-    ),
+    errorBuilder: (context, state) =>
+        NotFoundScreen(location: state.uri.toString()),
   );
 }

@@ -45,20 +45,22 @@ class Client {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'companyName': companyName,
-        'contactPerson': contactPerson,
-        'phone': phone,
-        'email': email,
-        'address': address,
-        'orderIds': orderIds,
-        'deletedAt': deletedAt?.toIso8601String(),
-      };
+    'id': id,
+    'companyName': companyName,
+    'contactPerson': contactPerson,
+    'phone': phone,
+    'email': email,
+    'address': address,
+    'orderIds': orderIds,
+    'deletedAt': deletedAt?.toIso8601String(),
+  };
 
   factory Client.fromJson(Map<String, dynamic> json) {
     String? address;
     final addressValue = json['address'];
-    if (addressValue != null && addressValue is String && addressValue.isNotEmpty) {
+    if (addressValue != null &&
+        addressValue is String &&
+        addressValue.isNotEmpty) {
       address = addressValue;
     }
 

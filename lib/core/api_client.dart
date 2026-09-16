@@ -109,7 +109,8 @@ class RetryInterceptor extends Interceptor {
   void onError(DioException err, ErrorInterceptorHandler handler) async {
     final method = err.requestOptions.method.toUpperCase();
     final isRead = method == 'GET';
-    final isTransient = err.type == DioExceptionType.connectionTimeout ||
+    final isTransient =
+        err.type == DioExceptionType.connectionTimeout ||
         err.type == DioExceptionType.receiveTimeout ||
         err.type == DioExceptionType.connectionError ||
         (err.response?.statusCode ?? 0) >= 500;

@@ -42,8 +42,7 @@ class EntityTable<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     int? sortColumnIndex;
     if (sortField != null) {
-      sortColumnIndex =
-          columns.indexWhere((col) => col.sortField == sortField);
+      sortColumnIndex = columns.indexWhere((col) => col.sortField == sortField);
       if (sortColumnIndex == -1) sortColumnIndex = null;
     }
 
@@ -57,15 +56,10 @@ class EntityTable<T> extends StatelessWidget {
             sortAscending: sortAscending,
             columns: [
               if (onToggleSelect != null)
-                const DataColumn(
-                  label: SizedBox(width: 40, child: Text('')),
-                ),
+                const DataColumn(label: SizedBox(width: 40, child: Text(''))),
               ...columns.map((col) {
                 return DataColumn(
-                  label: Text(
-                    col.label,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  label: Text(col.label, overflow: TextOverflow.ellipsis),
                   numeric: col.numeric,
                   onSort: col.sortField != null && onSort != null
                       ? (_, _) => onSort!(col.sortField!)

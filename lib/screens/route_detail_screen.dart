@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+
 import '../core/api_exceptions.dart';
 import '../models/role.dart';
 import '../repositories/route_repository.dart';
@@ -223,9 +224,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     await notifier.load();
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Маршрут скрыт')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Маршрут скрыт')));
     context.go('/routes');
   }
 
@@ -237,16 +237,16 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       allOrders = await orderRepo.findAll(includeDeleted: true);
     } on ApiException catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
       }
       return;
     }
     if (!context.mounted) return;
 
-    final relatedOrders =
-        allOrders.where((o) => o.routeIds.contains(id) && !o.isDeleted).toList();
+    final relatedOrders = allOrders
+        .where((o) => o.routeIds.contains(id) && !o.isDeleted)
+        .toList();
 
     if (relatedOrders.isNotEmpty) {
       await showDialog(
@@ -265,17 +265,22 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                 style: TextStyle(fontSize: 14),
               ),
               const SizedBox(height: 8),
-              ...relatedOrders.map((order) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2.0),
-                    child: Text(
-                      '• Заказ #${order.orderNumber} (${order.cargoDescription})',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                  )),
+              ...relatedOrders.map(
+                (order) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2.0),
+                  child: Text(
+                    '• Заказ #${order.orderNumber} (${order.cargoDescription})',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ),
+              ),
               const SizedBox(height: 12),
               Text(
                 'Количество заказов: ${relatedOrders.length}',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -355,9 +360,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     await notifier.load();
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Маршрут удалён навсегда')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Маршрут удалён навсегда')));
     context.go('/routes');
   }
 
@@ -413,9 +417,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     await notifier.load();
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Маршрут восстановлен')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Маршрут восстановлен')));
     context.go('/routes');
   }
 }

@@ -12,12 +12,7 @@ class PageResult<T> {
   });
 
   factory PageResult.empty() {
-    return const PageResult(
-      items: [],
-      page: 1,
-      size: 0,
-      total: 0,
-    );
+    return const PageResult(items: [], page: 1, size: 0, total: 0);
   }
 
   int get totalPages => size == 0 ? 0 : (total / size).ceil();

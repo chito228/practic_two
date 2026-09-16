@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+
 import '../../core/api_exceptions.dart';
 import '../../models/client.dart';
 import '../client_repository.dart';
@@ -126,10 +127,10 @@ class ApiClientRepository implements ClientRepository {
   }
 
   Map<String, dynamic> _toApiJson(Client item) => {
-        'companyName': item.companyName,
-        'contactPerson': item.contactPerson,
-        'phone': item.phone,
-        'email': item.email,
-        'address': item.address,
-      };
+    'companyName': item.companyName,
+    'contactPerson': item.contactPerson,
+    'phone': item.phone,
+    'email': item.email,
+    'address': item.address,
+  };
 }

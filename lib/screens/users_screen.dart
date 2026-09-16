@@ -54,9 +54,8 @@ class _UsersScreenState extends State<UsersScreen> {
       );
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
       }
     }
   }
@@ -91,14 +90,12 @@ class _UsersScreenState extends State<UsersScreen> {
       setState(() {
         _users.removeWhere((u) => u.id == user.id);
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Пользователь удалён')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Пользователь удалён')));
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
       }
     }
   }
@@ -124,10 +121,7 @@ class _UsersScreenState extends State<UsersScreen> {
           children: [
             Text(_error!),
             const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _load,
-              child: const Text('Повторить'),
-            ),
+            ElevatedButton(onPressed: _load, child: const Text('Повторить')),
           ],
         ),
       );
@@ -159,10 +153,12 @@ class _UsersScreenState extends State<UsersScreen> {
                         }
                       },
                 items: Role.values
-                    .map((r) => DropdownMenuItem<Role>(
-                          value: r,
-                          child: Text(r.label),
-                        ))
+                    .map(
+                      (r) => DropdownMenuItem<Role>(
+                        value: r,
+                        child: Text(r.label),
+                      ),
+                    )
                     .toList(),
               ),
               const SizedBox(width: 8),

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+
 import '../../core/api_exceptions.dart';
 import '../../models/cargo.dart';
 import '../cargo_repository.dart';
@@ -94,9 +95,9 @@ class ApiCargoRepository implements CargoRepository {
   }
 
   Map<String, dynamic> _toApiJson(Cargo item) => {
-        'name': item.name,
-        'description': item.description,
-        'weightPerUnit': item.weightPerUnit,
-        'volumePerUnit': item.volumePerUnit,
-      };
+    'name': item.name,
+    'description': item.description,
+    'weightPerUnit': item.weightPerUnit,
+    'volumePerUnit': item.volumePerUnit,
+  };
 }

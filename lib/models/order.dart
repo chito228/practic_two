@@ -61,38 +61,38 @@ class Order {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'orderNumber': orderNumber,
-        'clientId': clientId,
-        'cargoIds': cargoIds,
-        'routeIds': routeIds,
-        'cargoDescription': cargoDescription,
-        'weight': weight,
-        'volume': volume,
-        'shippingDate': shippingDate.toIso8601String(),
-        'deliveryDate': deliveryDate?.toIso8601String(),
-        'status': status,
-        'deletedAt': deletedAt?.toIso8601String(),
-      };
+    'id': id,
+    'orderNumber': orderNumber,
+    'clientId': clientId,
+    'cargoIds': cargoIds,
+    'routeIds': routeIds,
+    'cargoDescription': cargoDescription,
+    'weight': weight,
+    'volume': volume,
+    'shippingDate': shippingDate.toIso8601String(),
+    'deliveryDate': deliveryDate?.toIso8601String(),
+    'status': status,
+    'deletedAt': deletedAt?.toIso8601String(),
+  };
 
   factory Order.fromJson(Map<String, dynamic> json) => Order(
-        id: json['id'] as int? ?? 0,
-        orderNumber: json['orderNumber'] as String? ?? '',
-        clientId: json['clientId'] as int? ?? 0,
-        cargoIds: (json['cargoIds'] as List?)?.cast<int>() ?? [],
-        routeIds: (json['routeIds'] as List?)?.cast<int>() ?? [],
-        cargoDescription: json['cargoDescription'] as String? ?? '',
-        weight: (json['weight'] as num?)?.toDouble() ?? 0.0,
-        volume: (json['volume'] as num?)?.toDouble() ?? 0.0,
-        shippingDate: json['shippingDate'] == null
-            ? DateTime.now()
-            : DateTime.parse(json['shippingDate'] as String),
-        deliveryDate: json['deliveryDate'] == null
-            ? null
-            : DateTime.parse(json['deliveryDate'] as String),
-        status: json['status'] as String? ?? 'in_transit',
-        deletedAt: json['deletedAt'] == null
-            ? null
-            : DateTime.parse(json['deletedAt'] as String),
-      );
+    id: json['id'] as int? ?? 0,
+    orderNumber: json['orderNumber'] as String? ?? '',
+    clientId: json['clientId'] as int? ?? 0,
+    cargoIds: (json['cargoIds'] as List?)?.cast<int>() ?? [],
+    routeIds: (json['routeIds'] as List?)?.cast<int>() ?? [],
+    cargoDescription: json['cargoDescription'] as String? ?? '',
+    weight: (json['weight'] as num?)?.toDouble() ?? 0.0,
+    volume: (json['volume'] as num?)?.toDouble() ?? 0.0,
+    shippingDate: json['shippingDate'] == null
+        ? DateTime.now()
+        : DateTime.parse(json['shippingDate'] as String),
+    deliveryDate: json['deliveryDate'] == null
+        ? null
+        : DateTime.parse(json['deliveryDate'] as String),
+    status: json['status'] as String? ?? 'in_transit',
+    deletedAt: json['deletedAt'] == null
+        ? null
+        : DateTime.parse(json['deletedAt'] as String),
+  );
 }

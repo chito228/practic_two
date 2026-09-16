@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+
 import '../../core/api_exceptions.dart';
 import '../../models/vehicle.dart';
 import '../vehicle_repository.dart';
@@ -97,10 +98,10 @@ class ApiVehicleRepository implements VehicleRepository {
   /// В учебном сценарии лицензия редко редактируется из формы,
   /// поэтому шлём как есть — или null, если нет.
   Map<String, dynamic> _toApiJson(Vehicle item) => {
-        'plateNumber': item.plateNumber,
-        'driverName': item.driverName,
-        'capacity': item.capacity,
-        'status': item.status,
-        'driverLicense': item.driverLicense?.toJson(),
-      };
+    'plateNumber': item.plateNumber,
+    'driverName': item.driverName,
+    'capacity': item.capacity,
+    'status': item.status,
+    'driverLicense': item.driverLicense?.toJson(),
+  };
 }

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// Показывает диалог, ограниченный по ширине.
-/// На широких экранах диалог не растягивается на весь монитор.
 Future<T?> showAdaptiveDialog<T>({
   required BuildContext context,
   required WidgetBuilder builder,

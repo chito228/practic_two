@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../utils/breakpoints.dart';
 
 class ResponsiveList<T> extends StatelessWidget {
@@ -13,8 +14,8 @@ class ResponsiveList<T> extends StatelessWidget {
     required this.items,
     required this.cardBuilder,
     required this.tableBuilder,
-    this.twoColumnBreakpoint = Breakpoints.tablet, // 768
-    this.tableBreakpoint = Breakpoints.desktop,     // 1280
+    this.twoColumnBreakpoint = Breakpoints.tablet,
+    this.tableBreakpoint = Breakpoints.desktop,
   });
 
   @override
@@ -34,7 +35,7 @@ class ResponsiveList<T> extends StatelessWidget {
         padding: const EdgeInsets.all(8),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
-          childAspectRatio: 2.0,  // карточка выше — текст помещается
+          childAspectRatio: 2.0, // карточка выше — текст помещается
           crossAxisSpacing: 8,
           mainAxisSpacing: 8,
         ),

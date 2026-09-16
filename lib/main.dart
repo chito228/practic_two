@@ -79,29 +79,24 @@ Future<void> main() async {
         ),
 
         ChangeNotifierProvider(
-          create: (context) => ClientListNotifier(
-            context.read<ClientRepository>(),
-          )..load(),
+          create: (context) =>
+              ClientListNotifier(context.read<ClientRepository>())..load(),
         ),
         ChangeNotifierProvider(
-          create: (context) => OrderListNotifier(
-            context.read<OrderRepository>(),
-          )..load(),
+          create: (context) =>
+              OrderListNotifier(context.read<OrderRepository>())..load(),
         ),
         ChangeNotifierProvider(
-          create: (context) => CargoListNotifier(
-            context.read<CargoRepository>(),
-          )..load(),
+          create: (context) =>
+              CargoListNotifier(context.read<CargoRepository>())..load(),
         ),
         ChangeNotifierProvider(
-          create: (context) => RouteListNotifier(
-            context.read<RouteRepository>(),
-          )..load(),
+          create: (context) =>
+              RouteListNotifier(context.read<RouteRepository>())..load(),
         ),
         ChangeNotifierProvider(
-          create: (context) => VehicleListNotifier(
-            context.read<VehicleRepository>(),
-          )..load(),
+          create: (context) =>
+              VehicleListNotifier(context.read<VehicleRepository>())..load(),
         ),
       ],
       child: const MyApp(),
@@ -260,8 +255,7 @@ class _AppWrapperState extends State<_AppWrapper> {
     return InactivityWatcher(
       timeout: const Duration(minutes: 30),
       warningBefore: const Duration(seconds: 30),
-      warningMessage:
-          'Вы будете отключены через 30 секунд из-за неактивности. Продолжить работу?',
+      warningMessage: 'Вы будете отключены через 30 секунд из-за неактивности. Продолжить работу?',
       onTimeout: () async {
         await widget.authNotifier.logout();
       },

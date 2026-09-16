@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+
 import '../core/api_exceptions.dart';
 import '../models/role.dart';
 import '../repositories/order_repository.dart';
@@ -95,8 +96,10 @@ class OrderDetailScreen extends StatelessWidget {
                   if (cargoList.isNotEmpty)
                     ...cargoList.map((c) => _infoRow('•', c.name))
                   else
-                    const Text('Нет грузов',
-                        style: TextStyle(color: Colors.grey)),
+                    const Text(
+                      'Нет грузов',
+                      style: TextStyle(color: Colors.grey),
+                    ),
 
                   const Divider(height: 32),
                   const Text(
@@ -107,8 +110,10 @@ class OrderDetailScreen extends StatelessWidget {
                   if (routeList.isNotEmpty)
                     ...routeList.map((r) => _infoRow('•', r.name))
                   else
-                    const Text('Нет маршрутов',
-                        style: TextStyle(color: Colors.grey)),
+                    const Text(
+                      'Нет маршрутов',
+                      style: TextStyle(color: Colors.grey),
+                    ),
 
                   if (order.isDeleted)
                     _infoRow('Статус', 'Скрыт', color: Colors.orange),
@@ -259,9 +264,8 @@ class OrderDetailScreen extends StatelessWidget {
     await notifier.load();
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Заказ скрыт')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Заказ скрыт')));
     context.go('/orders');
   }
 
@@ -273,9 +277,8 @@ class OrderDetailScreen extends StatelessWidget {
       full = await orderRepo.findByIdWithRelations(id);
     } on ApiException catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
       }
       return;
     }
@@ -311,10 +314,12 @@ class OrderDetailScreen extends StatelessWidget {
                 style: TextStyle(fontSize: 14),
               ),
               const SizedBox(height: 8),
-              ...related.map((item) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2.0),
-                    child: Text(item, style: const TextStyle(fontSize: 14)),
-                  )),
+              ...related.map(
+                (item) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2.0),
+                  child: Text(item, style: const TextStyle(fontSize: 14)),
+                ),
+              ),
               const SizedBox(height: 12),
               Text(
                 'Количество связанных записей: ${related.length}',
@@ -401,9 +406,8 @@ class OrderDetailScreen extends StatelessWidget {
     await notifier.load();
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Заказ удалён навсегда')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Заказ удалён навсегда')));
     context.go('/orders');
   }
 
@@ -459,9 +463,8 @@ class OrderDetailScreen extends StatelessWidget {
     await notifier.load();
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Заказ восстановлен')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Заказ восстановлен')));
     context.go('/orders');
   }
 }

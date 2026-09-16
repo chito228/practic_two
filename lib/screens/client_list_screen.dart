@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+
 import '../models/role.dart';
 import '../state/auth_notifier.dart';
 import '../state/client_list_notifier.dart';
@@ -80,10 +81,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
                   value: notifier.query.includeDeleted,
                   onChanged: (value) {
                     notifier.applyQuery(
-                      notifier.query.copyWith(
-                        includeDeleted: value,
-                        page: 1,
-                      ),
+                      notifier.query.copyWith(includeDeleted: value, page: 1),
                     );
                   },
                 ),
@@ -109,8 +107,10 @@ class _ClientListScreenState extends State<ClientListScreen> {
           ),
           if (notifier.query.hasFilters)
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 8.0,
+              ),
               child: Wrap(
                 spacing: 8,
                 children: [
@@ -118,8 +118,10 @@ class _ClientListScreenState extends State<ClientListScreen> {
                     ActionChip(
                       label: Text('Поиск: ${notifier.query.search}'),
                       onPressed: () {
-                        final newQuery =
-                            notifier.query.copyWith(search: '', page: 1);
+                        final newQuery = notifier.query.copyWith(
+                          search: '',
+                          page: 1,
+                        );
                         notifier.applyQuery(newQuery);
                       },
                     ),
@@ -127,8 +129,10 @@ class _ClientListScreenState extends State<ClientListScreen> {
                     ActionChip(
                       label: const Text('Показаны удалённые'),
                       onPressed: () {
-                        final newQuery = notifier.query
-                            .copyWith(includeDeleted: false, page: 1);
+                        final newQuery = notifier.query.copyWith(
+                          includeDeleted: false,
+                          page: 1,
+                        );
                         notifier.applyQuery(newQuery);
                       },
                     ),
@@ -142,9 +146,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
                 ],
               ),
             ),
-          Expanded(
-            child: _buildContent(notifier, auth),
-          ),
+          Expanded(child: _buildContent(notifier, auth)),
           if (notifier.status == LoadStatus.success &&
               notifier.result.total > 0)
             Padding(
@@ -155,9 +157,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
                 totalItems: notifier.result.total,
                 pageSize: notifier.query.size,
                 onPageChanged: (page) {
-                  notifier.applyQuery(
-                    notifier.query.copyWith(page: page),
-                  );
+                  notifier.applyQuery(notifier.query.copyWith(page: page));
                 },
                 onSizeChanged: (size) {
                   notifier.applyQuery(
@@ -292,7 +292,8 @@ class _ClientListScreenState extends State<ClientListScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Скрыть клиента?'),
         content: const Text(
-            'Клиент будет скрыт, но не удалён. Его можно будет восстановить.'),
+          'Клиент будет скрыт, но не удалён. Его можно будет восстановить.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -306,12 +307,10 @@ class _ClientListScreenState extends State<ClientListScreen> {
       ),
     );
     if (confirmed == true) {
-      final repository =
-          Provider.of<ClientRepository>(context, listen: false);
+      final repository = Provider.of<ClientRepository>(context, listen: false);
       await repository.softDelete(id);
       if (!context.mounted) return;
-      final notifier =
-          Provider.of<ClientListNotifier>(context, listen: false);
+      final notifier = Provider.of<ClientListNotifier>(context, listen: false);
       await notifier.load();
     }
   }
@@ -338,18 +337,22 @@ class _ClientListScreenState extends State<ClientListScreen> {
                 style: TextStyle(fontSize: 14),
               ),
               const SizedBox(height: 8),
-              ...orders.map((order) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2.0),
-                    child: Text(
-                      '• Заказ #${order.orderNumber} (${order.cargoDescription})',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                  )),
+              ...orders.map(
+                (order) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2.0),
+                  child: Text(
+                    '• Заказ #${order.orderNumber} (${order.cargoDescription})',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ),
+              ),
               const SizedBox(height: 12),
               Text(
                 'Количество заказов: ${orders.length}',
-                style:
-                    const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -388,20 +391,20 @@ class _ClientListScreenState extends State<ClientListScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить навсегда',
-                style: TextStyle(fontSize: 14, color: Colors.red)),
+            child: const Text(
+              'Удалить навсегда',
+              style: TextStyle(fontSize: 14, color: Colors.red),
+            ),
           ),
         ],
       ),
     );
 
     if (confirmed == true) {
-      final repository =
-          Provider.of<ClientRepository>(context, listen: false);
+      final repository = Provider.of<ClientRepository>(context, listen: false);
       await repository.hardDelete(id);
       if (!context.mounted) return;
-      final notifier =
-          Provider.of<ClientListNotifier>(context, listen: false);
+      final notifier = Provider.of<ClientListNotifier>(context, listen: false);
       await notifier.load();
 
       if (context.mounted) {
@@ -416,7 +419,9 @@ class _ClientListScreenState extends State<ClientListScreen> {
   }
 
   Future<void> _confirmDelete(
-      BuildContext context, ClientListNotifier notifier) async {
+    BuildContext context,
+    ClientListNotifier notifier,
+  ) async {
     final orderRepo = Provider.of<OrderRepository>(context, listen: false);
     final clientsWithOrders = <int>[];
 
@@ -457,7 +462,8 @@ class _ClientListScreenState extends State<ClientListScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Подтверждение удаления'),
         content: Text(
-            'Вы уверены, что хотите удалить ${notifier.selected.length} клиентов?'),
+          'Вы уверены, что хотите удалить ${notifier.selected.length} клиентов?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

@@ -38,9 +38,9 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isSaving = true);
     try {
       await context.read<AuthNotifier>().login(
-            _usernameController.text.trim(),
-            _passwordController.text,
-          );
+        _usernameController.text.trim(),
+        _passwordController.text,
+      );
       if (!mounted) return;
       final target = widget.from ?? '/';
       context.go(target);
@@ -145,17 +145,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           ? const SizedBox(
                               width: 20,
                               height: 20,
-                              child:
-                                  CircularProgressIndicator(strokeWidth: 2),
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Text('Войти'),
                     ),
                   ),
                   const SizedBox(height: 16),
                   TextButton(
-                    onPressed: _isSaving
-                        ? null
-                        : () => context.go('/register'),
+                    onPressed: _isSaving ? null : () => context.go('/register'),
                     child: const Text('Зарегистрироваться'),
                   ),
                 ],

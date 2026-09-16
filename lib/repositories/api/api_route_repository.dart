@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+
 import '../../core/api_exceptions.dart';
 import '../../models/route.dart';
 import '../route_repository.dart';
@@ -98,10 +99,7 @@ class ApiRouteRepository implements RouteRepository {
     return guard(() async {
       final response = await _dio.get<Map<String, dynamic>>(
         '/routes',
-        queryParameters: {
-          'vehicleId': vehicleId,
-          'size': 100,
-        },
+        queryParameters: {'vehicleId': vehicleId, 'size': 100},
       );
       final data = response.data!;
       return (data['items'] as List? ?? [])
@@ -112,12 +110,12 @@ class ApiRouteRepository implements RouteRepository {
   }
 
   Map<String, dynamic> _toApiJson(Route item) => {
-        'name': item.name,
-        'origin': item.origin,
-        'destination': item.destination,
-        'distance': item.distance,
-        'vehicleId': item.vehicleId,
-        'estimatedTime': item.estimatedTime,
-        'status': item.status,
-      };
+    'name': item.name,
+    'origin': item.origin,
+    'destination': item.destination,
+    'distance': item.distance,
+    'vehicleId': item.vehicleId,
+    'estimatedTime': item.estimatedTime,
+    'status': item.status,
+  };
 }
