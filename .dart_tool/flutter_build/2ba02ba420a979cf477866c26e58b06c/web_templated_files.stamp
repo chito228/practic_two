@@ -1,0 +1,1 @@
+{"inputs":["/home/denis/project_two/web/*/index.html","/home/denis/project_two/web/flutter_bootstrap.js","/home/denis/flutter/bin/cache/engine.stamp"],"outputs":["/home/denis/project_two/build/web/*/index.html","/home/denis/project_two/build/web/flutter_bootstrap.js"],"buildKey":"[{\"compileTarget\":\"dart2js\",\"renderer\":\"canvaskit\",\"mainJsPath\":\"main.dart.js\"},{}]"}
