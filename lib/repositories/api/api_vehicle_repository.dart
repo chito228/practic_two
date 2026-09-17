@@ -2,37 +2,38 @@ import 'package:dio/dio.dart';
 
 import '../../core/api_exceptions.dart';
 import '../../models/vehicle.dart';
-import '../../state/page_result.dart';
-import '../../state/vehicle_query.dart';
 import '../vehicle_repository.dart';
+import '../../state/vehicle_query.dart';
+import '../../state/page_result.dart';
 
 class ApiVehicleRepository implements VehicleRepository {
   final Dio _dio;
   ApiVehicleRepository(this._dio);
 
+  static const _path = '/api/collections/vehicles/records';
+
   @override
   Future<List<Vehicle>> findAll({bool includeDeleted = false}) {
     return guard(() async {
       final response = await _dio.get<Map<String, dynamic>>(
-        '/vehicles',
+        _path,
         queryParameters: {
-          if (includeDeleted) 'includeDeleted': true,
-          'size': 100,
+          'perPage': 200,
+          if (!includeDeleted) 'filter': '(deleted = false)',
         },
       );
-      final data = response.data!;
-      return (data['items'] as List? ?? [])
-          .whereType<Map<String, dynamic>>()
+      return (response.data!['items'] as List)
+          .cast<Map<String, dynamic>>()
           .map(Vehicle.fromJson)
           .toList();
     });
   }
 
   @override
-  Future<Vehicle?> findById(int id) {
+  Future<Vehicle?> findById(String id) {
     return guard(() async {
       try {
-        final response = await _dio.get<Map<String, dynamic>>('/vehicles/$id');
+        final response = await _dio.get<Map<String, dynamic>>('$_path/$id');
         return Vehicle.fromJson(response.data!);
       } on DioException catch (e) {
         if (e.response?.statusCode == 404) return null;
@@ -47,27 +48,34 @@ class ApiVehicleRepository implements VehicleRepository {
     CancelToken? cancelToken,
   }) {
     return guard(() async {
+      final filters = <String>[];
+      if (!query.includeDeleted) filters.add('(deleted = false)');
+      if (query.status != null) filters.add('(status = "${query.status}")');
+
+      final search = query.search.trim();
+      if (search.isNotEmpty) {
+        filters.add('(plateNumber ~ "${search}" || driverName ~ "${search}")');
+      }
+
       final response = await _dio.get<Map<String, dynamic>>(
-        '/vehicles',
+        _path,
         cancelToken: cancelToken,
         queryParameters: {
-          if (query.search.trim().isNotEmpty) 'search': query.search.trim(),
-          if (query.status != null) 'status': query.status,
-          'sort': '${query.sortField},${query.sortAscending ? 'asc' : 'desc'}',
+          if (filters.isNotEmpty) 'filter': filters.join(' && '),
+          'sort': '${query.sortAscending ? '' : '-'}${query.sortField}',
           'page': query.page,
-          'size': query.size,
-          if (query.includeDeleted) 'includeDeleted': true,
+          'perPage': query.size,
         },
       );
       final data = response.data!;
       return PageResult(
-        items: (data['items'] as List? ?? [])
-            .whereType<Map<String, dynamic>>()
+        items: (data['items'] as List)
+            .cast<Map<String, dynamic>>()
             .map(Vehicle.fromJson)
             .toList(),
         page: data['page'] as int? ?? 1,
-        size: data['size'] as int? ?? query.size,
-        total: data['total'] as int? ?? 0,
+        size: data['perPage'] as int? ?? query.size,
+        total: data['totalItems'] as int? ?? 0,
       );
     });
   }
@@ -76,8 +84,8 @@ class ApiVehicleRepository implements VehicleRepository {
   Future<Vehicle> create(Vehicle item) {
     return guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(
-        '/vehicles',
-        data: _toApiJson(item),
+        _path,
+        data: item.toJson(),
       );
       return Vehicle.fromJson(response.data!);
     });
@@ -86,51 +94,53 @@ class ApiVehicleRepository implements VehicleRepository {
   @override
   Future<Vehicle> update(Vehicle item) {
     return guard(() async {
-      final response = await _dio.put<Map<String, dynamic>>(
-        '/vehicles/${item.id}',
-        data: _toApiJson(item),
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '$_path/${item.id}',
+        data: item.toJson(),
       );
       return Vehicle.fromJson(response.data!);
     });
   }
 
   @override
-  Future<void> softDelete(int id) {
+  Future<Vehicle> updateStatus(String id, String status) {
     return guard(() async {
-      await _dio.delete<void>('/vehicles/$id');
-    });
-  }
-
-  @override
-  Future<void> hardDelete(int id) {
-    return guard(() async {
-      await _dio.delete<void>('/vehicles/$id', queryParameters: {'hard': true});
-    });
-  }
-
-  @override
-  Future<void> restore(int id) {
-    return guard(() async {
-      await _dio.post<void>('/vehicles/$id/restore');
-    });
-  }
-
-  @override
-  Future<int> deleteMany(List<int> ids) {
-    return guard(() async {
-      final response = await _dio.post<Map<String, dynamic>>(
-        '/vehicles/bulk-delete',
-        data: {'ids': ids},
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '$_path/$id',
+        data: {'status': status},
       );
-      return response.data!['deleted'] as int? ?? 0;
+      return Vehicle.fromJson(response.data!);
     });
   }
 
-  Map<String, dynamic> _toApiJson(Vehicle item) => {
-    'plateNumber': item.plateNumber,
-    'driverName': item.driverName,
-    'capacity': item.capacity,
-    'status': item.status,
-    'driverLicense': item.driverLicense?.toJson(),
-  };
+  @override
+  Future<void> softDelete(String id) {
+    return guard(() async {
+      await _dio.patch<void>('$_path/$id', data: {'deleted': true});
+    });
+  }
+
+  @override
+  Future<void> hardDelete(String id) {
+    return guard(() async {
+      await _dio.delete<void>('$_path/$id');
+    });
+  }
+
+  @override
+  Future<void> restore(String id) {
+    return guard(() async {
+      await _dio.patch<void>('$_path/$id', data: {'deleted': false});
+    });
+  }
+
+  @override
+  Future<int> deleteMany(List<String> ids) {
+    return guard(() async {
+      for (final id in ids) {
+        await _dio.patch<void>('$_path/$id', data: {'deleted': true});
+      }
+      return ids.length;
+    });
+  }
 }

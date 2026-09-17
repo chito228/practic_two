@@ -7,6 +7,7 @@ import '../models/task.dart';
 import '../state/auth_notifier.dart';
 import '../state/task_list_notifier.dart';
 import '../state/task_query.dart';
+import '../state/load_status.dart';
 import '../repositories/task_repository.dart';
 import '../widgets/entity_table.dart';
 import '../widgets/responsive_list.dart';
@@ -15,9 +16,9 @@ import '../widgets/empty_view.dart';
 import '../widgets/main_scaffold.dart';
 import '../widgets/task_status_chip.dart';
 import '../widgets/pagination_controls.dart';
+import '../widgets/cannot_delete_dialog.dart';
 import '../utils/debounce.dart';
-import '../state/load_status.dart';
-import '../core/api_exceptions.dart';
+import '../utils/entity_dependencies.dart';
 
 class TaskListScreen extends StatefulWidget {
   const TaskListScreen({super.key});
@@ -54,14 +55,14 @@ class _TaskListScreenState extends State<TaskListScreen> {
               ),
             ),
           ),
-        if (notifier.hasSelection && auth.uiHasExactly(Role.admin))
+        if (notifier.hasSelection && auth.uiCanHardDelete)
           IconButton(
             icon: const Icon(Icons.delete_outline),
             tooltip: 'Удалить выбранные',
             onPressed: () => _confirmDelete(context, notifier),
           ),
       ],
-      floatingActionButton: auth.uiHasExactly(Role.manager)
+      floatingActionButton: auth.uiCanEditTasks
           ? FloatingActionButton(
               onPressed: () => context.go('/tasks/create'),
               tooltip: 'Создать задачу',
@@ -321,20 +322,21 @@ class _TaskListScreenState extends State<TaskListScreen> {
             items: items,
             idOf: (t) => t.id,
             selected: notifier.selected,
-            onToggleSelect: auth.uiHasExactly(Role.manager)
+            onToggleSelect: auth.uiCanHardDelete
                 ? notifier.toggleSelection
                 : null,
             sortField: notifier.query.sortField,
             sortAscending: notifier.query.sortAscending,
             onSort: (field) {
-              final q = notifier.query.copyWith(
-                sortField: field,
-                sortAscending: field == notifier.query.sortField
-                    ? !notifier.query.sortAscending
-                    : true,
-                page: 1,
+              notifier.applyQuery(
+                notifier.query.copyWith(
+                  sortField: field,
+                  sortAscending: field == notifier.query.sortField
+                      ? !notifier.query.sortAscending
+                      : true,
+                  page: 1,
+                ),
               );
-              notifier.applyQuery(q);
             },
             columns: [
               TableColumnSpec<Task>(
@@ -364,49 +366,29 @@ class _TaskListScreenState extends State<TaskListScreen> {
             actions: (t) => [
               TextButton(
                 onPressed: () => context.go('/tasks/${t.id}'),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  minimumSize: Size.zero,
-                ),
                 child: const Text('Показать', style: TextStyle(fontSize: 12)),
               ),
-              if (auth.uiHasExactly(Role.manager) && !t.isDeleted)
+              if (auth.uiCanEditTasks && !t.isDeleted)
                 TextButton(
                   onPressed: () => context.go('/tasks/${t.id}/edit'),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    minimumSize: Size.zero,
-                  ),
                   child: const Text('Ред.', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHasExactly(Role.manager) && !t.isDeleted)
+              if (auth.uiCanEditTasks && !t.isDeleted)
                 TextButton(
                   onPressed: () => _softDelete(context, t.id),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    minimumSize: Size.zero,
-                    foregroundColor: Colors.orange,
-                  ),
+                  style: TextButton.styleFrom(foregroundColor: Colors.orange),
                   child: const Text('Скрыть', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHasExactly(Role.admin) && !t.isDeleted)
+              if (auth.uiCanHardDelete && !t.isDeleted)
                 TextButton(
-                  onPressed: () => _hardDelete(context, t.id),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    minimumSize: Size.zero,
-                    foregroundColor: Colors.red,
-                  ),
+                  onPressed: () => _hardDelete(context, t),
+                  style: TextButton.styleFrom(foregroundColor: Colors.red),
                   child: const Text('Удалить', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHasExactly(Role.admin) && t.isDeleted)
+              if (auth.uiCanHardDelete && t.isDeleted)
                 TextButton(
                   onPressed: () => _restore(context, t.id),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    minimumSize: Size.zero,
-                    foregroundColor: Colors.green,
-                  ),
+                  style: TextButton.styleFrom(foregroundColor: Colors.green),
                   child: const Text(
                     'Восстановить',
                     style: TextStyle(fontSize: 12),
@@ -418,14 +400,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
     }
   }
 
-  Future<void> _softDelete(BuildContext context, int id) async {
+  Future<void> _softDelete(BuildContext context, String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Скрыть задачу?'),
-        content: const Text(
-          'Задача будет скрыта, но не удалена. Её можно будет восстановить.',
-        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -440,35 +419,31 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
     if (confirmed != true) return;
     if (!context.mounted) return;
-
-    try {
-      final repository = Provider.of<TaskRepository>(context, listen: false);
-      await repository.softDelete(id);
-    } on ApiException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-      }
-      return;
-    }
-
+    final repository = Provider.of<TaskRepository>(context, listen: false);
+    await repository.softDelete(id);
     if (!context.mounted) return;
     final notifier = Provider.of<TaskListNotifier>(context, listen: false);
     await notifier.load();
   }
 
-  Future<void> _hardDelete(BuildContext context, int id) async {
+  Future<void> _hardDelete(BuildContext context, Task task) async {
+    final blockers = await EntityDependencies.forTask(context, task.id);
+
+    if (blockers.isNotEmpty) {
+      if (!context.mounted) return;
+      await showCannotDeleteDialog(
+        context,
+        entityName: task.title,
+        blockers: blockers,
+      );
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text(
-          'Удалить задачу навсегда?',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          'Это действие нельзя отменить!',
-          style: TextStyle(fontSize: 14),
-        ),
+        title: const Text('Удалить задачу навсегда?'),
+        content: const Text('Это действие нельзя отменить!'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -476,65 +451,23 @@ class _TaskListScreenState extends State<TaskListScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Удалить навсегда',
-              style: TextStyle(color: Colors.red),
-            ),
+            child: const Text('Удалить'),
           ),
         ],
       ),
     );
     if (confirmed != true) return;
     if (!context.mounted) return;
-
-    try {
-      final repository = Provider.of<TaskRepository>(context, listen: false);
-      await repository.hardDelete(id);
-    } on ApiException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-      }
-      return;
-    }
-
+    final repository = Provider.of<TaskRepository>(context, listen: false);
+    await repository.hardDelete(task.id);
     if (!context.mounted) return;
     final notifier = Provider.of<TaskListNotifier>(context, listen: false);
     await notifier.load();
   }
 
-  Future<void> _restore(BuildContext context, int id) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Восстановить задачу?'),
-        content: const Text('Задача снова появится в списке.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Восстановить'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    if (!context.mounted) return;
-
-    try {
-      final repository = Provider.of<TaskRepository>(context, listen: false);
-      await repository.restore(id);
-    } on ApiException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-      }
-      return;
-    }
-
+  Future<void> _restore(BuildContext context, String id) async {
+    final repository = Provider.of<TaskRepository>(context, listen: false);
+    await repository.restore(id);
     if (!context.mounted) return;
     final notifier = Provider.of<TaskListNotifier>(context, listen: false);
     await notifier.load();
@@ -548,9 +481,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Подтверждение удаления'),
-        content: Text(
-          'Удалить ${notifier.selected.length} задач?',
-        ),
+        content: Text('Удалить ${notifier.selected.length} задач?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

@@ -9,7 +9,7 @@ import '../widgets/generic_form.dart';
 import '../state/client_list_notifier.dart';
 
 class ClientFormScreen extends StatefulWidget {
-  final int? id;
+  final String? id;
   const ClientFormScreen({super.key, this.id});
 
   bool get isEditing => id != null;
@@ -35,14 +35,13 @@ class _ClientFormScreenState extends State<ClientFormScreen> {
       if (!mounted) return;
       if (c != null) _client = c;
     } else {
-      _client = Client(
-        id: 0,
+      _client = const Client(
+        id: '',
         companyName: '',
         contactPerson: '',
         phone: '',
         email: '',
         address: null,
-        orderIds: [],
       );
     }
     if (mounted) setState(() => _isLoading = false);
@@ -54,31 +53,25 @@ class _ClientFormScreenState extends State<ClientFormScreen> {
     final addressValue = (values['address'] as String?)?.trim() ?? '';
 
     final newClient = Client(
-      id: _client?.id ?? 0,
+      id: _client?.id ?? '',
       companyName: (values['companyName'] as String?) ?? '',
       contactPerson: (values['contactPerson'] as String?) ?? '',
       phone: (values['phone'] as String?) ?? '',
       email: (values['email'] as String?) ?? '',
       address: addressValue.isEmpty ? null : addressValue,
-      orderIds: _client?.orderIds ?? [],
+      isDeleted: _client?.isDeleted ?? false,
     );
 
-    // Исключения ValidationException / ConflictException пробрасываются
-    // наружу — их ловит GenericForm и показывает в полях / snackbar.
     if (widget.isEditing) {
       await repo.update(newClient);
     } else {
       await repo.create(newClient);
     }
 
-    // Сбрасываем кэш справочника клиентов: следующий запрос
-    // к кэшу подтянет свежие данные (с новым/изменённым клиентом).
     cache.invalidate('clients');
-
     if (!mounted) return;
     final notifier = context.read<ClientListNotifier>();
     await notifier.load();
-
     if (mounted) context.go('/clients');
   }
 

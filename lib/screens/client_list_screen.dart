@@ -3,20 +3,21 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 
 import '../models/role.dart';
+import '../models/client.dart';
 import '../state/auth_notifier.dart';
 import '../state/client_list_notifier.dart';
-import '../models/client.dart';
+import '../state/client_query.dart';
+import '../state/load_status.dart';
+import '../repositories/client_repository.dart';
 import '../widgets/entity_table.dart';
 import '../widgets/responsive_list.dart';
 import '../widgets/error_view.dart';
 import '../widgets/empty_view.dart';
 import '../widgets/main_scaffold.dart';
-import '../utils/debounce.dart';
-import '../state/load_status.dart';
-import '../state/client_query.dart';
 import '../widgets/pagination_controls.dart';
-import '../repositories/client_repository.dart';
-import '../repositories/order_repository.dart';
+import '../widgets/cannot_delete_dialog.dart';
+import '../utils/debounce.dart';
+import '../utils/entity_dependencies.dart';
 
 class ClientListScreen extends StatefulWidget {
   const ClientListScreen({super.key});
@@ -53,14 +54,14 @@ class _ClientListScreenState extends State<ClientListScreen> {
               ),
             ),
           ),
-        if (notifier.hasSelection && auth.uiHasExactly(Role.logist))
+        if (notifier.hasSelection && auth.uiCanSoftDelete)
           IconButton(
             icon: const Icon(Icons.delete_outline),
             tooltip: 'Удалить выбранные',
             onPressed: () => _confirmDelete(context, notifier),
           ),
       ],
-      floatingActionButton: auth.uiHasExactly(Role.logist)
+      floatingActionButton: auth.uiCanEditBusiness
           ? FloatingActionButton(
               onPressed: () => context.go('/clients/create'),
               tooltip: 'Создать клиента',
@@ -212,7 +213,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
             items: items,
             idOf: (c) => c.id,
             selected: notifier.selected,
-            onToggleSelect: auth.uiHasExactly(Role.logist)
+            onToggleSelect: auth.uiCanSoftDelete
                 ? notifier.toggleSelection
                 : null,
             sortField: notifier.query.sortField,
@@ -251,7 +252,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
                 ),
                 child: const Text('Показать', style: TextStyle(fontSize: 12)),
               ),
-              if (auth.uiHasExactly(Role.logist))
+              if (auth.uiCanEditBusiness && !c.isDeleted)
                 TextButton(
                   onPressed: () => context.go('/clients/${c.id}/edit'),
                   style: TextButton.styleFrom(
@@ -260,7 +261,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
                   ),
                   child: const Text('Ред.', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHasExactly(Role.logist))
+              if (auth.uiCanSoftDelete && !c.isDeleted)
                 TextButton(
                   onPressed: () => _softDelete(context, c.id),
                   style: TextButton.styleFrom(
@@ -270,9 +271,9 @@ class _ClientListScreenState extends State<ClientListScreen> {
                   ),
                   child: const Text('Скрыть', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHasExactly(Role.admin))
+              if (auth.uiCanHardDelete && !c.isDeleted)
                 TextButton(
-                  onPressed: () => _hardDelete(context, c.id),
+                  onPressed: () => _hardDelete(context, c),
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     minimumSize: Size.zero,
@@ -280,13 +281,26 @@ class _ClientListScreenState extends State<ClientListScreen> {
                   ),
                   child: const Text('Удалить', style: TextStyle(fontSize: 12)),
                 ),
+              if (auth.uiCanHardDelete && c.isDeleted)
+                TextButton(
+                  onPressed: () => _restore(context, c.id),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    minimumSize: Size.zero,
+                    foregroundColor: Colors.green,
+                  ),
+                  child: const Text(
+                    'Восстановить',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
             ],
           ),
         );
     }
   }
 
-  Future<void> _softDelete(BuildContext context, int id) async {
+  Future<void> _softDelete(BuildContext context, String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -306,153 +320,33 @@ class _ClientListScreenState extends State<ClientListScreen> {
         ],
       ),
     );
-    if (confirmed == true) {
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    try {
       final repository = Provider.of<ClientRepository>(context, listen: false);
       await repository.softDelete(id);
-      if (!context.mounted) return;
-      final notifier = Provider.of<ClientListNotifier>(context, listen: false);
-      await notifier.load();
-    }
-  }
-
-  Future<void> _hardDelete(BuildContext context, int id) async {
-    final orderRepo = Provider.of<OrderRepository>(context, listen: false);
-    final orders = await orderRepo.findByClientId(id);
-    if (!context.mounted) return;
-
-    if (orders.isNotEmpty) {
-      await showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text(
-            'Невозможно удалить клиента',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'У этого клиента есть активные заказы:',
-                style: TextStyle(fontSize: 14),
-              ),
-              const SizedBox(height: 8),
-              ...orders.map(
-                (order) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2.0),
-                  child: Text(
-                    '• Заказ #${order.orderNumber} (${order.cargoDescription})',
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Количество заказов: ${orders.length}',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Сначала удалите или переназначьте заказы, затем попробуйте снова.',
-                style: TextStyle(fontSize: 14, color: Colors.grey),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK', style: TextStyle(fontSize: 14)),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text(
-          'Удалить клиента навсегда?',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          'Это действие нельзя отменить!\n\n'
-          'Все данные клиента будут безвозвратно удалены.',
-          style: TextStyle(fontSize: 14),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена', style: TextStyle(fontSize: 14)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Удалить навсегда',
-              style: TextStyle(fontSize: 14, color: Colors.red),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      final repository = Provider.of<ClientRepository>(context, listen: false);
-      await repository.hardDelete(id);
-      if (!context.mounted) return;
-      final notifier = Provider.of<ClientListNotifier>(context, listen: false);
-      await notifier.load();
-
+    } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Клиент удалён навсегда'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
       }
-    }
-  }
-
-  Future<void> _confirmDelete(
-    BuildContext context,
-    ClientListNotifier notifier,
-  ) async {
-    final orderRepo = Provider.of<OrderRepository>(context, listen: false);
-    final clientsWithOrders = <int>[];
-
-    for (final id in notifier.selected) {
-      final orders = await orderRepo.findByClientId(id);
-      if (orders.isNotEmpty) {
-        clientsWithOrders.add(id);
-      }
+      return;
     }
     if (!context.mounted) return;
+    final notifier = Provider.of<ClientListNotifier>(context, listen: false);
+    await notifier.load();
+  }
 
-    if (clientsWithOrders.isNotEmpty) {
-      await showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text(
-            'Невозможно удалить клиентов',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          content: Text(
-            '${clientsWithOrders.length} клиент(ов) имеют активные заказы.\n\n'
-            'Сначала удалите или переназначьте заказы, затем попробуйте снова.',
-            style: const TextStyle(fontSize: 14),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK', style: TextStyle(fontSize: 14)),
-            ),
-          ],
-        ),
+  Future<void> _hardDelete(BuildContext context, Client client) async {
+    final blockers = await EntityDependencies.forClient(context, client.id);
+
+    if (blockers.isNotEmpty) {
+      if (!context.mounted) return;
+      await showCannotDeleteDialog(
+        context,
+        entityName: client.companyName,
+        blockers: blockers,
       );
       return;
     }
@@ -460,10 +354,8 @@ class _ClientListScreenState extends State<ClientListScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Подтверждение удаления'),
-        content: Text(
-          'Вы уверены, что хотите удалить ${notifier.selected.length} клиентов?',
-        ),
+        title: const Text('Удалить клиента навсегда?'),
+        content: const Text('Это действие нельзя отменить!'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -471,7 +363,58 @@ class _ClientListScreenState extends State<ClientListScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить'),
+            child: const Text(
+              'Удалить навсегда',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    try {
+      final repository = Provider.of<ClientRepository>(context, listen: false);
+      await repository.hardDelete(client.id);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+      }
+      return;
+    }
+    if (!context.mounted) return;
+    final notifier = Provider.of<ClientListNotifier>(context, listen: false);
+    await notifier.load();
+  }
+
+  Future<void> _restore(BuildContext context, String id) async {
+    if (!context.mounted) return;
+    final repository = Provider.of<ClientRepository>(context, listen: false);
+    await repository.restore(id);
+    if (!context.mounted) return;
+    final notifier = Provider.of<ClientListNotifier>(context, listen: false);
+    await notifier.load();
+  }
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    ClientListNotifier notifier,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Подтверждение удаления'),
+        content: Text('Скрыть ${notifier.selected.length} клиентов?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Скрыть'),
           ),
         ],
       ),

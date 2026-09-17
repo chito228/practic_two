@@ -9,34 +9,34 @@ import '../order_repository.dart';
 import '../../state/order_query.dart';
 import '../../state/page_result.dart';
 
-/// Реализация OrderRepository через HTTP API (Dio).
 class ApiOrderRepository implements OrderRepository {
   final Dio _dio;
   ApiOrderRepository(this._dio);
+
+  static const _path = '/api/collections/orders/records';
 
   @override
   Future<List<Order>> findAll({bool includeDeleted = false}) {
     return guard(() async {
       final response = await _dio.get<Map<String, dynamic>>(
-        '/orders',
+        _path,
         queryParameters: {
-          if (includeDeleted) 'includeDeleted': true,
-          'size': 100,
+          'perPage': 200,
+          if (!includeDeleted) 'filter': '(deleted = false)',
         },
       );
-      final data = response.data!;
-      return (data['items'] as List? ?? [])
-          .whereType<Map<String, dynamic>>()
+      return (response.data!['items'] as List)
+          .cast<Map<String, dynamic>>()
           .map(Order.fromJson)
           .toList();
     });
   }
 
   @override
-  Future<Order?> findById(int id) {
+  Future<Order?> findById(String id) {
     return guard(() async {
       try {
-        final response = await _dio.get<Map<String, dynamic>>('/orders/$id');
+        final response = await _dio.get<Map<String, dynamic>>('$_path/$id');
         return Order.fromJson(response.data!);
       } on DioException catch (e) {
         if (e.response?.statusCode == 404) return null;
@@ -45,25 +45,27 @@ class ApiOrderRepository implements OrderRepository {
     });
   }
 
-  /// Один HTTP-запрос GET /orders/{id}.
-  /// Сервер в ответе уже отдаёт развёрнутые client, cargo[], routes[].
   @override
-  Future<OrderFull?> findByIdWithRelations(int id) {
+  Future<OrderFull?> findByIdWithRelations(String id) {
     return guard(() async {
       try {
-        final response = await _dio.get<Map<String, dynamic>>('/orders/$id');
+        final response = await _dio.get<Map<String, dynamic>>(
+          '$_path/$id',
+          queryParameters: {'expand': 'client,cargo,routes'},
+        );
         final data = response.data!;
+        final expand = data['expand'] as Map<String, dynamic>? ?? {};
 
         return OrderFull(
           order: Order.fromJson(data),
-          client: data['client'] is Map<String, dynamic>
-              ? Client.fromJson(data['client'] as Map<String, dynamic>)
+          client: expand['client'] is Map<String, dynamic>
+              ? Client.fromJson(expand['client'] as Map<String, dynamic>)
               : null,
-          cargo: (data['cargo'] as List? ?? [])
+          cargo: (expand['cargo'] as List? ?? [])
               .whereType<Map<String, dynamic>>()
               .map(Cargo.fromJson)
               .toList(),
-          routes: (data['routes'] as List? ?? [])
+          routes: (expand['routes'] as List? ?? [])
               .whereType<Map<String, dynamic>>()
               .map((e) => model.Route.fromJson(e))
               .toList(),
@@ -76,35 +78,54 @@ class ApiOrderRepository implements OrderRepository {
   }
 
   @override
-  Future<PageResult<Order>> find(OrderQuery query, {CancelToken? cancelToken}) {
+  Future<PageResult<Order>> find(
+    OrderQuery query, {
+    CancelToken? cancelToken,
+  }) {
     return guard(() async {
+      final filters = <String>[];
+      if (!query.includeDeleted) filters.add('(deleted = false)');
+      if (query.status != null) filters.add('(status = "${query.status}")');
+      if (query.clientId != null) filters.add('(client = "${query.clientId}")');
+      if (query.cargoId != null) filters.add('(cargo ~ "${query.cargoId}")');
+      if (query.routeId != null) filters.add('(routes ~ "${query.routeId}")');
+      if (query.dateFrom != null) {
+        filters.add(
+          '(shippingDate >= "${query.dateFrom!.toIso8601String()}")',
+        );
+      }
+      if (query.dateTo != null) {
+        filters.add(
+          '(shippingDate <= "${query.dateTo!.toIso8601String()}")',
+        );
+      }
+
+      final search = query.search.trim();
+      if (search.isNotEmpty) {
+        filters.add(
+          '(orderNumber ~ "${search}" || cargoDescription ~ "${search}")',
+        );
+      }
+
       final response = await _dio.get<Map<String, dynamic>>(
-        '/orders',
+        _path,
         cancelToken: cancelToken,
         queryParameters: {
-          if (query.search.trim().isNotEmpty) 'search': query.search.trim(),
-          if (query.status != null) 'status': query.status,
-          if (query.clientId != null) 'clientId': query.clientId,
-          if (query.cargoId != null) 'cargoId': query.cargoId,
-          if (query.routeId != null) 'routeId': query.routeId,
-          if (query.dateFrom != null)
-            'dateFrom': query.dateFrom!.toIso8601String(),
-          if (query.dateTo != null) 'dateTo': query.dateTo!.toIso8601String(),
-          'sort': '${query.sortField},${query.sortAscending ? 'asc' : 'desc'}',
+          if (filters.isNotEmpty) 'filter': filters.join(' && '),
+          'sort': '${query.sortAscending ? '' : '-'}${query.sortField}',
           'page': query.page,
-          'size': query.size,
-          if (query.includeDeleted) 'includeDeleted': true,
+          'perPage': query.size,
         },
       );
       final data = response.data!;
       return PageResult(
-        items: (data['items'] as List? ?? [])
-            .whereType<Map<String, dynamic>>()
+        items: (data['items'] as List)
+            .cast<Map<String, dynamic>>()
             .map(Order.fromJson)
             .toList(),
         page: data['page'] as int? ?? 1,
-        size: data['size'] as int? ?? query.size,
-        total: data['total'] as int? ?? 0,
+        size: data['perPage'] as int? ?? query.size,
+        total: data['totalItems'] as int? ?? 0,
       );
     });
   }
@@ -113,8 +134,8 @@ class ApiOrderRepository implements OrderRepository {
   Future<Order> create(Order item) {
     return guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(
-        '/orders',
-        data: _toApiJson(item),
+        _path,
+        data: item.toJson(),
       );
       return Order.fromJson(response.data!);
     });
@@ -123,71 +144,59 @@ class ApiOrderRepository implements OrderRepository {
   @override
   Future<Order> update(Order item) {
     return guard(() async {
-      final response = await _dio.put<Map<String, dynamic>>(
-        '/orders/${item.id}',
-        data: _toApiJson(item),
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '$_path/${item.id}',
+        data: item.toJson(),
       );
       return Order.fromJson(response.data!);
     });
   }
 
   @override
-  Future<void> softDelete(int id) {
+  Future<void> softDelete(String id) {
     return guard(() async {
-      await _dio.delete<void>('/orders/$id');
+      await _dio.patch<void>('$_path/$id', data: {'deleted': true});
     });
   }
 
   @override
-  Future<void> hardDelete(int id) {
+  Future<void> hardDelete(String id) {
     return guard(() async {
-      await _dio.delete<void>('/orders/$id', queryParameters: {'hard': true});
+      await _dio.delete<void>('$_path/$id');
     });
   }
 
   @override
-  Future<void> restore(int id) {
+  Future<void> restore(String id) {
     return guard(() async {
-      await _dio.post<void>('/orders/$id/restore');
+      await _dio.patch<void>('$_path/$id', data: {'deleted': false});
     });
   }
 
   @override
-  Future<int> deleteMany(List<int> ids) {
+  Future<int> deleteMany(List<String> ids) {
     return guard(() async {
-      final response = await _dio.post<Map<String, dynamic>>(
-        '/orders/bulk-delete',
-        data: {'ids': ids},
-      );
-      return response.data!['deleted'] as int? ?? 0;
+      for (final id in ids) {
+        await _dio.patch<void>('$_path/$id', data: {'deleted': true});
+      }
+      return ids.length;
     });
   }
 
   @override
-  Future<List<Order>> findByClientId(int clientId) {
+  Future<List<Order>> findByClientId(String clientId) {
     return guard(() async {
       final response = await _dio.get<Map<String, dynamic>>(
-        '/orders',
-        queryParameters: {'clientId': clientId, 'size': 100},
+        _path,
+        queryParameters: {
+          'filter': '(client = "$clientId") && (deleted = false)',
+          'perPage': 200,
+        },
       );
-      final data = response.data!;
-      return (data['items'] as List? ?? [])
-          .whereType<Map<String, dynamic>>()
+      return (response.data!['items'] as List)
+          .cast<Map<String, dynamic>>()
           .map(Order.fromJson)
           .toList();
     });
   }
-
-  Map<String, dynamic> _toApiJson(Order item) => {
-    'orderNumber': item.orderNumber,
-    'clientId': item.clientId,
-    'cargoIds': item.cargoIds,
-    'routeIds': item.routeIds,
-    'cargoDescription': item.cargoDescription,
-    'weight': item.weight,
-    'volume': item.volume,
-    'shippingDate': item.shippingDate.toIso8601String(),
-    'deliveryDate': item.deliveryDate?.toIso8601String(),
-    'status': item.status,
-  };
 }

@@ -1,11 +1,11 @@
+/// Груз.
 class Cargo {
-  final int id;
+  final String id;
   final String name;
   final String? description;
   final double weightPerUnit;
   final double volumePerUnit;
-  final List<int> orderIds;
-  final DateTime? deletedAt;
+  final bool isDeleted;
 
   const Cargo({
     required this.id,
@@ -13,21 +13,16 @@ class Cargo {
     this.description,
     required this.weightPerUnit,
     required this.volumePerUnit,
-    required this.orderIds,
-    this.deletedAt,
+    this.isDeleted = false,
   });
 
-  bool get isDeleted => deletedAt != null;
-
   Cargo copyWith({
-    int? id,
+    String? id,
     String? name,
     String? description,
     double? weightPerUnit,
     double? volumePerUnit,
-    List<int>? orderIds,
-    DateTime? deletedAt,
-    bool clearDeletedAt = false,
+    bool? isDeleted,
   }) {
     return Cargo(
       id: id ?? this.id,
@@ -35,30 +30,25 @@ class Cargo {
       description: description ?? this.description,
       weightPerUnit: weightPerUnit ?? this.weightPerUnit,
       volumePerUnit: volumePerUnit ?? this.volumePerUnit,
-      orderIds: orderIds ?? this.orderIds,
-      deletedAt: clearDeletedAt ? null : (deletedAt ?? this.deletedAt),
+      isDeleted: isDeleted ?? this.isDeleted,
     );
   }
 
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
-    'description': description,
-    'weightPerUnit': weightPerUnit,
-    'volumePerUnit': volumePerUnit,
-    'orderIds': orderIds,
-    'deletedAt': deletedAt?.toIso8601String(),
-  };
-
   factory Cargo.fromJson(Map<String, dynamic> json) => Cargo(
-    id: json['id'] as int? ?? 0,
+    id: json['id'] as String? ?? '',
     name: json['name'] as String? ?? '',
-    description: json['description'] as String?,
+    description: (json['description'] as String?)?.isEmpty == true
+        ? null
+        : json['description'] as String?,
     weightPerUnit: (json['weightPerUnit'] as num?)?.toDouble() ?? 0.0,
     volumePerUnit: (json['volumePerUnit'] as num?)?.toDouble() ?? 0.0,
-    orderIds: (json['orderIds'] as List?)?.cast<int>() ?? [],
-    deletedAt: json['deletedAt'] == null
-        ? null
-        : DateTime.parse(json['deletedAt'] as String),
+    isDeleted: json['deleted'] as bool? ?? false,
   );
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'description': description ?? '',
+    'weightPerUnit': weightPerUnit,
+    'volumePerUnit': volumePerUnit,
+  };
 }

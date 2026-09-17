@@ -7,10 +7,12 @@ import 'config.dart';
 /// Собирает Dio с интерсепторами: логирование, авторизация,
 /// обновление токена, повтор при сетевом сбое.
 ///
-/// Не знает про AuthNotifier напрямую — принимает колбэки:
-/// - [tokenProvider] — отдаёт текущий accessToken (или null).
-/// - [onRefresh] — вызывает refresh; true, если удалось.
-/// - [onUnauthorized] — вызывается на 401 после неудачного refresh.
+/// Отличия от версии для мок-сервера:
+/// - Authorization без префикса `Bearer` — PocketBase принимает
+///   токен как есть.
+/// - Refresh-эндпоинт — `/api/collections/users/auth-refresh`.
+/// - Условие `!path.contains('/auth-')` — чтобы не зациклиться
+///   на неудачном входе.
 Dio buildDio({
   String? Function()? tokenProvider,
   Future<bool> Function()? onRefresh,
@@ -31,7 +33,8 @@ Dio buildDio({
       onRequest: (options, handler) {
         final token = tokenProvider?.call();
         if (token != null && token.isNotEmpty) {
-          options.headers['Authorization'] = 'Bearer $token';
+          // PocketBase ожидает голый токен, без `Bearer `.
+          options.headers['Authorization'] = token;
         }
         if (kDebugMode) {
           debugPrint('[API →] ${options.method} ${options.uri}');
@@ -63,9 +66,9 @@ Dio buildDio({
         final path = error.requestOptions.path;
 
         // 401 на защищённом адресе → пробуем refresh и повтор.
-        // Условие !path.contains('/auth/') обязательно: без него
+        // Условие `!path.contains('/auth-')` обязательно: без него
         // неудачный логин вызовет refresh, тот вернёт 401 — цикл.
-        if (status == 401 && !path.contains('/auth/')) {
+        if (status == 401 && !path.contains('/auth-')) {
           if (onRefresh != null) {
             final ok = await onRefresh();
             if (ok) {
@@ -73,7 +76,7 @@ Dio buildDio({
                 final options = error.requestOptions;
                 final freshToken = tokenProvider?.call();
                 if (freshToken != null) {
-                  options.headers['Authorization'] = 'Bearer $freshToken';
+                  options.headers['Authorization'] = freshToken;
                 }
                 final response = await dio.fetch(options);
                 return handler.resolve(response);

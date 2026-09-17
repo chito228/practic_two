@@ -9,7 +9,7 @@ import '../widgets/generic_form.dart';
 import '../state/cargo_list_notifier.dart';
 
 class CargoFormScreen extends StatefulWidget {
-  final int? id;
+  final String? id;
   const CargoFormScreen({super.key, this.id});
 
   bool get isEditing => id != null;
@@ -35,13 +35,12 @@ class _CargoFormScreenState extends State<CargoFormScreen> {
       if (!mounted) return;
       if (c != null) _cargo = c;
     } else {
-      _cargo = Cargo(
-        id: 0,
+      _cargo = const Cargo(
+        id: '',
         name: '',
-        description: '',
+        description: null,
         weightPerUnit: 0.0,
         volumePerUnit: 0.0,
-        orderIds: [],
       );
     }
     if (mounted) setState(() => _isLoading = false);
@@ -53,14 +52,14 @@ class _CargoFormScreenState extends State<CargoFormScreen> {
     final desc = (values['description'] as String?)?.trim() ?? '';
 
     final cargo = Cargo(
-      id: _cargo?.id ?? 0,
+      id: _cargo?.id ?? '',
       name: (values['name'] as String?) ?? '',
       description: desc.isEmpty ? null : desc,
       weightPerUnit:
           double.tryParse(values['weightPerUnit']?.toString() ?? '') ?? 0.0,
       volumePerUnit:
           double.tryParse(values['volumePerUnit']?.toString() ?? '') ?? 0.0,
-      orderIds: _cargo?.orderIds ?? [],
+      isDeleted: _cargo?.isDeleted ?? false,
     );
 
     if (widget.isEditing) {
@@ -69,13 +68,10 @@ class _CargoFormScreenState extends State<CargoFormScreen> {
       await repo.create(cargo);
     }
 
-    // Сбрасываем кэш справочника грузов.
     cache.invalidate('cargo');
-
     if (!mounted) return;
     final notifier = context.read<CargoListNotifier>();
     await notifier.load();
-
     if (mounted) context.go('/cargo');
   }
 

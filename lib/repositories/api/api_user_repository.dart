@@ -8,7 +8,11 @@ import '../../state/page_result.dart';
 import '../../state/user_query.dart';
 import '../user_repository.dart';
 
-/// Реализация UserRepository через AuthApi (Dio).
+/// Реализация UserRepository через AuthApi (Dio → PocketBase).
+///
+/// Серверная фильтрация по роли и поиску в PocketBase
+/// для `users` не поддерживается «из коробки» через простые
+/// query-параметры, поэтому фильтруем на клиенте после загрузки.
 class ApiUserRepository implements UserRepository {
   final AuthApi _api;
   ApiUserRepository(this._api);
@@ -16,14 +20,15 @@ class ApiUserRepository implements UserRepository {
   @override
   Future<List<AppUser>> findAll({bool includeDeleted = false}) {
     return guard(() async {
-      final users = await _api.listUsers(includeDeleted: includeDeleted);
-      return users;
+      return _api.listUsers(includeDeleted: includeDeleted);
     });
   }
 
   @override
-  Future<AppUser?> findById(int id) {
+  Future<AppUser?> findById(String id) {
     return guard(() async {
+      // Загружаем все (включая скрытых), чтобы уметь показать
+      // запись даже если она скрыта.
       final users = await _api.listUsers(includeDeleted: true);
       try {
         return users.firstWhere((u) => u.id == id);
@@ -33,14 +38,14 @@ class ApiUserRepository implements UserRepository {
     });
   }
 
-  /// AuthApi не поддерживает серверную фильтрацию,
-  /// поэтому фильтруем на клиенте внутри репозитория.
   @override
   Future<PageResult<AppUser>> find(
     UserQuery query, {
     CancelToken? cancelToken,
   }) {
     return guard(() async {
+      // Забираем всех (или только активных), а фильтрацию/сортировку/
+      // пагинацию делаем на клиенте.
       var rows = await _api.listUsers(includeDeleted: query.includeDeleted);
 
       // Поиск по ФИО, логину, email.
@@ -119,7 +124,7 @@ class ApiUserRepository implements UserRepository {
 
   @override
   Future<AppUser> update({
-    required int id,
+    required String id,
     String? fullName,
     String? email,
     String? password,
@@ -136,36 +141,33 @@ class ApiUserRepository implements UserRepository {
     });
   }
 
-  /// Мягкое удаление — пользователь скрывается.
   @override
-  Future<void> softDelete(int id) {
+  Future<void> softDelete(String id) {
     return guard(() async {
-      await _api.deleteUser(id);
+      await _api.softDeleteUser(id);
     });
   }
 
-  /// Физическое удаление — запись стирается безвозвратно.
   @override
-  Future<void> hardDelete(int id) {
+  Future<void> hardDelete(String id) {
     return guard(() async {
       await _api.hardDeleteUser(id);
     });
   }
 
-  /// Восстановление ранее скрытого пользователя.
   @override
-  Future<void> restore(int id) {
+  Future<void> restore(String id) {
     return guard(() async {
       await _api.restoreUser(id);
     });
   }
 
   @override
-  Future<int> deleteMany(List<int> ids) {
+  Future<int> deleteMany(List<String> ids) {
     return guard(() async {
       var count = 0;
       for (final id in ids) {
-        await _api.deleteUser(id);
+        await _api.softDeleteUser(id);
         count++;
       }
       return count;

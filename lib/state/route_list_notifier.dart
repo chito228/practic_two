@@ -16,14 +16,14 @@ class RouteListNotifier extends ChangeNotifier {
   PageResult<model.Route> _result = PageResult.empty();
   LoadStatus _status = LoadStatus.idle;
   String? _error;
-  final Set<int> _selected = {};
+  final Set<String> _selected = {};
   CancelToken? _cancelToken;
 
   RouteQuery get query => _query;
   PageResult<model.Route> get result => _result;
   LoadStatus get status => _status;
   String? get error => _error;
-  Set<int> get selected => Set.unmodifiable(_selected);
+  Set<String> get selected => Set.unmodifiable(_selected);
   bool get hasSelection => _selected.isNotEmpty;
 
   Future<void> load() async {
@@ -54,7 +54,7 @@ class RouteListNotifier extends ChangeNotifier {
     await load();
   }
 
-  void toggleSelection(int id) {
+  void toggleSelection(String id) {
     if (_selected.contains(id)) {
       _selected.remove(id);
     } else {

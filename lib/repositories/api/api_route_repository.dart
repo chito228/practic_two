@@ -2,37 +2,38 @@ import 'package:dio/dio.dart';
 
 import '../../core/api_exceptions.dart';
 import '../../models/route.dart';
-import '../../state/page_result.dart';
-import '../../state/route_query.dart';
 import '../route_repository.dart';
+import '../../state/route_query.dart';
+import '../../state/page_result.dart';
 
 class ApiRouteRepository implements RouteRepository {
   final Dio _dio;
   ApiRouteRepository(this._dio);
 
+  static const _path = '/api/collections/routes/records';
+
   @override
   Future<List<Route>> findAll({bool includeDeleted = false}) {
     return guard(() async {
       final response = await _dio.get<Map<String, dynamic>>(
-        '/routes',
+        _path,
         queryParameters: {
-          if (includeDeleted) 'includeDeleted': true,
-          'size': 100,
+          'perPage': 200,
+          if (!includeDeleted) 'filter': '(deleted = false)',
         },
       );
-      final data = response.data!;
-      return (data['items'] as List? ?? [])
-          .whereType<Map<String, dynamic>>()
+      return (response.data!['items'] as List)
+          .cast<Map<String, dynamic>>()
           .map(Route.fromJson)
           .toList();
     });
   }
 
   @override
-  Future<Route?> findById(int id) {
+  Future<Route?> findById(String id) {
     return guard(() async {
       try {
-        final response = await _dio.get<Map<String, dynamic>>('/routes/$id');
+        final response = await _dio.get<Map<String, dynamic>>('$_path/$id');
         return Route.fromJson(response.data!);
       } on DioException catch (e) {
         if (e.response?.statusCode == 404) return null;
@@ -47,28 +48,37 @@ class ApiRouteRepository implements RouteRepository {
     CancelToken? cancelToken,
   }) {
     return guard(() async {
+      final filters = <String>[];
+      if (!query.includeDeleted) filters.add('(deleted = false)');
+      if (query.status != null) filters.add('(status = "${query.status}")');
+      if (query.vehicleId != null) filters.add('(vehicle = "${query.vehicleId}")');
+
+      final search = query.search.trim();
+      if (search.isNotEmpty) {
+        filters.add(
+          '(name ~ "${search}" || origin ~ "${search}" || destination ~ "${search}")',
+        );
+      }
+
       final response = await _dio.get<Map<String, dynamic>>(
-        '/routes',
+        _path,
         cancelToken: cancelToken,
         queryParameters: {
-          if (query.search.trim().isNotEmpty) 'search': query.search.trim(),
-          if (query.status != null) 'status': query.status,
-          if (query.vehicleId != null) 'vehicleId': query.vehicleId,
-          'sort': '${query.sortField},${query.sortAscending ? 'asc' : 'desc'}',
+          if (filters.isNotEmpty) 'filter': filters.join(' && '),
+          'sort': '${query.sortAscending ? '' : '-'}${query.sortField}',
           'page': query.page,
-          'size': query.size,
-          if (query.includeDeleted) 'includeDeleted': true,
+          'perPage': query.size,
         },
       );
       final data = response.data!;
       return PageResult(
-        items: (data['items'] as List? ?? [])
-            .whereType<Map<String, dynamic>>()
+        items: (data['items'] as List)
+            .cast<Map<String, dynamic>>()
             .map(Route.fromJson)
             .toList(),
         page: data['page'] as int? ?? 1,
-        size: data['size'] as int? ?? query.size,
-        total: data['total'] as int? ?? 0,
+        size: data['perPage'] as int? ?? query.size,
+        total: data['totalItems'] as int? ?? 0,
       );
     });
   }
@@ -77,8 +87,8 @@ class ApiRouteRepository implements RouteRepository {
   Future<Route> create(Route item) {
     return guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(
-        '/routes',
-        data: _toApiJson(item),
+        _path,
+        data: item.toJson(),
       );
       return Route.fromJson(response.data!);
     });
@@ -87,68 +97,59 @@ class ApiRouteRepository implements RouteRepository {
   @override
   Future<Route> update(Route item) {
     return guard(() async {
-      final response = await _dio.put<Map<String, dynamic>>(
-        '/routes/${item.id}',
-        data: _toApiJson(item),
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '$_path/${item.id}',
+        data: item.toJson(),
       );
       return Route.fromJson(response.data!);
     });
   }
 
   @override
-  Future<void> softDelete(int id) {
+  Future<void> softDelete(String id) {
     return guard(() async {
-      await _dio.delete<void>('/routes/$id');
+      await _dio.patch<void>('$_path/$id', data: {'deleted': true});
     });
   }
 
   @override
-  Future<void> hardDelete(int id) {
+  Future<void> hardDelete(String id) {
     return guard(() async {
-      await _dio.delete<void>('/routes/$id', queryParameters: {'hard': true});
+      await _dio.delete<void>('$_path/$id');
     });
   }
 
   @override
-  Future<void> restore(int id) {
+  Future<void> restore(String id) {
     return guard(() async {
-      await _dio.post<void>('/routes/$id/restore');
+      await _dio.patch<void>('$_path/$id', data: {'deleted': false});
     });
   }
 
   @override
-  Future<int> deleteMany(List<int> ids) {
+  Future<int> deleteMany(List<String> ids) {
     return guard(() async {
-      final response = await _dio.post<Map<String, dynamic>>(
-        '/routes/bulk-delete',
-        data: {'ids': ids},
-      );
-      return response.data!['deleted'] as int? ?? 0;
+      for (final id in ids) {
+        await _dio.patch<void>('$_path/$id', data: {'deleted': true});
+      }
+      return ids.length;
     });
   }
 
   @override
-  Future<List<Route>> findByVehicleId(int vehicleId) {
+  Future<List<Route>> findByVehicleId(String vehicleId) {
     return guard(() async {
       final response = await _dio.get<Map<String, dynamic>>(
-        '/routes',
-        queryParameters: {'vehicleId': vehicleId, 'size': 100},
+        _path,
+        queryParameters: {
+          'filter': '(vehicle = "$vehicleId") && (deleted = false)',
+          'perPage': 200,
+        },
       );
-      final data = response.data!;
-      return (data['items'] as List? ?? [])
-          .whereType<Map<String, dynamic>>()
+      return (response.data!['items'] as List)
+          .cast<Map<String, dynamic>>()
           .map(Route.fromJson)
           .toList();
     });
   }
-
-  Map<String, dynamic> _toApiJson(Route item) => {
-    'name': item.name,
-    'origin': item.origin,
-    'destination': item.destination,
-    'distance': item.distance,
-    'vehicleId': item.vehicleId,
-    'estimatedTime': item.estimatedTime,
-    'status': item.status,
-  };
 }

@@ -37,6 +37,10 @@ import 'repositories/api/api_warehouse_repository.dart';
 import 'repositories/task_repository.dart';
 import 'repositories/api/api_task_repository.dart';
 
+// ─── НОВЫЕ репозитории (DriverLicense) ─────────────
+import 'repositories/driver_license_repository.dart';
+import 'repositories/api/api_driver_license_repository.dart';
+
 // ─── Старые notifier'ы (не трогаем) ────────────────
 import 'state/auth_notifier.dart';
 import 'state/client_list_notifier.dart';
@@ -97,6 +101,12 @@ Future<void> main() async {
         ),
         Provider<OrderRepository>(
           create: (context) => ApiOrderRepository(context.read<Dio>()),
+        ),
+
+        // ─── НОВЫЙ репозиторий (DriverLicense) ─────
+        Provider<DriverLicenseRepository>(
+          create: (context) =>
+              ApiDriverLicenseRepository(context.read<Dio>()),
         ),
 
         // ─── Старые notifier'ы (не трогаем) ────────
@@ -198,21 +208,32 @@ class _AppWrapper extends StatefulWidget {
 
 class _AppWrapperState extends State<_AppWrapper> {
   Timer? _sessionTimer;
+  Timer? _connectivityTimer;
   bool _warningShown = false;
+
+  /// Последнее известное состояние связи с сервером.
+  /// true — сервер отвечает, false — нет.
+  bool _isOnline = true;
 
   @override
   void initState() {
     super.initState();
     widget.authNotifier.addListener(_onAuthChanged);
     _startSessionTimer();
+    _startConnectivityTimer();
   }
 
   @override
   void dispose() {
     widget.authNotifier.removeListener(_onAuthChanged);
     _sessionTimer?.cancel();
+    _connectivityTimer?.cancel();
     super.dispose();
   }
+
+  // ─────────────────────────────────────────────
+  // Сессия
+  // ─────────────────────────────────────────────
 
   void _onAuthChanged() {
     if (!widget.authNotifier.isAuthenticated) {
@@ -255,8 +276,6 @@ class _AppWrapperState extends State<_AppWrapper> {
     if (!mounted) return;
 
     final seconds = left.inSeconds;
-    // context здесь — из State, который находится ПОД MaterialApp,
-    // значит Navigator доступен.
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -298,6 +317,66 @@ class _AppWrapperState extends State<_AppWrapper> {
     }
   }
 
+  // ─────────────────────────────────────────────
+  // Связь с сервером: пинг + авто-перезагрузка
+  // ─────────────────────────────────────────────
+
+  void _startConnectivityTimer() {
+    _connectivityTimer?.cancel();
+    _checkConnectivity(); // первый пинг сразу
+    _connectivityTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _checkConnectivity(),
+    );
+  }
+
+  Future<void> _checkConnectivity() async {
+    final dio = context.read<Dio>();
+    bool online;
+    try {
+      final response = await dio.get<dynamic>(
+        '/api/health',
+        options: Options(
+          sendTimeout: const Duration(seconds: 3),
+          receiveTimeout: const Duration(seconds: 3),
+          // 4xx/5xx не считаем офлайном: сервер ответил — он доступен.
+          validateStatus: (_) => true,
+        ),
+      );
+      online = (response.statusCode ?? 0) < 500;
+    } catch (_) {
+      online = false;
+    }
+
+    if (!mounted) return;
+
+    final wasOffline = !_isOnline;
+    if (_isOnline != online) {
+      setState(() => _isOnline = online);
+    }
+
+    // Переход offline → online: авто-перезагрузка всех списков.
+    if (online && wasOffline) {
+      _reloadAll();
+    }
+  }
+
+  Future<void> _reloadAll() async {
+    if (!mounted) return;
+    try {
+      context.read<ClientListNotifier>().load();
+      context.read<OrderListNotifier>().load();
+      context.read<CargoListNotifier>().load();
+      context.read<RouteListNotifier>().load();
+      context.read<VehicleListNotifier>().load();
+      context.read<UserListNotifier>().load();
+      context.read<WarehouseListNotifier>().load();
+      context.read<TaskListNotifier>().load();
+    } catch (_) {
+      // Игнорируем: если какой-то нотифаер ещё не создан, ничего страшного.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return InactivityWatcher(
@@ -308,7 +387,46 @@ class _AppWrapperState extends State<_AppWrapper> {
       onTimeout: () async {
         await widget.authNotifier.logout();
       },
-      child: widget.child,
+      child: Column(
+        children: [
+          // Баннер «Нет соединения» поверх любого экрана.
+          if (!_isOnline)
+            Material(
+              color: Colors.red.shade700,
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.cloud_off,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          'Нет соединения с сервером. Пытаемся восстановить…',
+                          style: TextStyle(color: Colors.white, fontSize: 14),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _checkConnectivity,
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Проверить'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          Expanded(child: widget.child),
+        ],
+      ),
     );
   }
 }

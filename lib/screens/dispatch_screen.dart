@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 
 import '../core/api_exceptions.dart';
 import '../models/client.dart';
@@ -10,9 +10,8 @@ import '../repositories/order_repository.dart';
 import '../state/load_status.dart';
 import '../widgets/empty_view.dart';
 import '../widgets/error_view.dart';
+import '../widgets/main_scaffold.dart';
 
-/// Диспетчерская — простой список заказов на сегодня.
-/// Без стилей, без чипов, без иконок.
 class DispatchScreen extends StatefulWidget {
   const DispatchScreen({super.key});
 
@@ -24,7 +23,7 @@ class _DispatchScreenState extends State<DispatchScreen> {
   LoadStatus _status = LoadStatus.idle;
   String? _error;
   List<Order> _orders = [];
-  Map<int, String> _clientNames = {};
+  Map<String, String> _clientNames = {};
 
   @override
   void initState() {
@@ -56,15 +55,14 @@ class _DispatchScreenState extends State<DispatchScreen> {
       final dayStart = DateTime(now.year, now.month, now.day);
       final dayEnd = dayStart.add(const Duration(days: 1));
 
-      final todayOrders =
-          allOrders
-              .where(
-                (o) =>
-                    !o.shippingDate.isBefore(dayStart) &&
-                    o.shippingDate.isBefore(dayEnd),
-              )
-              .toList()
-            ..sort((a, b) => a.shippingDate.compareTo(b.shippingDate));
+      final todayOrders = allOrders
+          .where(
+            (o) =>
+                !o.shippingDate.isBefore(dayStart) &&
+                o.shippingDate.isBefore(dayEnd),
+          )
+          .toList()
+        ..sort((a, b) => a.shippingDate.compareTo(b.shippingDate));
 
       setState(() {
         _orders = todayOrders;
@@ -102,8 +100,9 @@ class _DispatchScreenState extends State<DispatchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Диспетчерская')),
+    return MainScaffold(
+      title: 'Диспетчерская',
+      currentRoute: '/dispatch',
       body: _buildBody(),
     );
   }
@@ -130,7 +129,7 @@ class _DispatchScreenState extends State<DispatchScreen> {
   }
 
   Widget _orderTile(Order o) {
-    final client = _clientNames[o.clientId] ?? 'Клиент #${o.clientId}';
+    final client = _clientNames[o.clientId] ?? 'Клиент ${o.clientId}';
     final time = _formatTime(o.shippingDate);
 
     return ListTile(

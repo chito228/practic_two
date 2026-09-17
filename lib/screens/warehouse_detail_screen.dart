@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 
-import '../core/api_exceptions.dart';
 import '../models/role.dart';
+import '../models/warehouse.dart';
 import '../models/cargo.dart';
 import '../models/route.dart' as model;
 import '../repositories/warehouse_repository.dart';
@@ -11,9 +11,11 @@ import '../repositories/cargo_repository.dart';
 import '../repositories/route_repository.dart';
 import '../state/auth_notifier.dart';
 import '../state/warehouse_list_notifier.dart';
+import '../widgets/cannot_delete_dialog.dart';
+import '../utils/entity_dependencies.dart';
 
 class WarehouseDetailScreen extends StatelessWidget {
-  final int id;
+  final String id;
   const WarehouseDetailScreen({super.key, required this.id});
 
   @override
@@ -21,7 +23,7 @@ class WarehouseDetailScreen extends StatelessWidget {
     final repository = Provider.of<WarehouseRepository>(context);
     final auth = context.watch<AuthNotifier>();
 
-    return FutureBuilder(
+    return FutureBuilder<Warehouse?>(
       future: repository.findById(id),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -45,7 +47,7 @@ class WarehouseDetailScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _infoRow('ID', w.id.toString()),
+                  _infoRow('ID', w.id),
                   _infoRow('Название', w.name),
                   _infoRow('Адрес', w.address),
                   _infoRow('Тип', w.type.label),
@@ -105,27 +107,30 @@ class WarehouseDetailScreen extends StatelessWidget {
                         onPressed: () => context.go('/warehouses'),
                         child: const Text('Назад'),
                       ),
-                      if (auth.uiHasExactly(Role.logist) && !w.isDeleted)
+                      if (auth.uiCanEditBusiness && !w.isDeleted)
                         ElevatedButton(
                           onPressed: () =>
                               context.go('/warehouses/${w.id}/edit'),
                           child: const Text('Редактировать'),
                         ),
-                      if (auth.uiHasExactly(Role.logist) && !w.isDeleted)
-                        ElevatedButton(
-                          onPressed: () => _softDelete(context, w.id),
-                          child: const Text('Скрыть'),
-                        ),
-                      if (auth.uiHasExactly(Role.admin) && !w.isDeleted)
-                        ElevatedButton(
-                          onPressed: () => _hardDelete(context, w),
-                          child: const Text('Удалить'),
-                        ),
-                      if (auth.uiHasExactly(Role.admin) && w.isDeleted)
-                        ElevatedButton(
-                          onPressed: () => _restore(context, w.id),
-                          child: const Text('Восстановить'),
-                        ),
+                      if (!w.isDeleted) ...[
+                        if (auth.uiCanSoftDelete)
+                          ElevatedButton(
+                            onPressed: () => _softDelete(context, w.id),
+                            child: const Text('Скрыть'),
+                          ),
+                        if (auth.uiCanHardDelete)
+                          ElevatedButton(
+                            onPressed: () => _hardDelete(context, w),
+                            child: const Text('Удалить'),
+                          ),
+                      ] else ...[
+                        if (auth.uiCanHardDelete)
+                          ElevatedButton(
+                            onPressed: () => _restore(context, w.id),
+                            child: const Text('Восстановить'),
+                          ),
+                      ],
                     ],
                   ),
                 ],
@@ -137,7 +142,7 @@ class WarehouseDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _cargoList(BuildContext context, List<int> cargoIds) {
+  Widget _cargoList(BuildContext context, List<String> cargoIds) {
     if (cargoIds.isEmpty) {
       return const Text('Нет грузов', style: TextStyle(color: Colors.grey));
     }
@@ -164,7 +169,7 @@ class WarehouseDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _routeList(BuildContext context, List<int> routeIds) {
+  Widget _routeList(BuildContext context, List<String> routeIds) {
     if (routeIds.isEmpty) {
       return const Text('Нет маршрутов', style: TextStyle(color: Colors.grey));
     }
@@ -222,14 +227,11 @@ class WarehouseDetailScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _softDelete(BuildContext context, int id) async {
+  Future<void> _softDelete(BuildContext context, String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Скрыть склад?'),
-        content: const Text(
-          'Склад будет скрыт, но не удалён. Его можно будет восстановить.',
-        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -244,70 +246,25 @@ class WarehouseDetailScreen extends StatelessWidget {
     );
     if (confirmed != true) return;
     if (!context.mounted) return;
-
-    try {
-      final repo = Provider.of<WarehouseRepository>(context, listen: false);
-      await repo.softDelete(id);
-    } on ApiException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-      }
-      return;
-    }
-
+    final repo = Provider.of<WarehouseRepository>(context, listen: false);
+    await repo.softDelete(id);
     if (!context.mounted) return;
-    final notifier = Provider.of<WarehouseListNotifier>(
-      context,
-      listen: false,
-    );
+    final notifier =
+        Provider.of<WarehouseListNotifier>(context, listen: false);
     await notifier.load();
     if (!context.mounted) return;
     context.go('/warehouses');
   }
 
-  Future<void> _hardDelete(BuildContext context, dynamic w) async {
-    if (w.cargoIds.isNotEmpty || w.routeIds.isNotEmpty) {
-      await showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text(
-            'Невозможно удалить склад',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Склад используется в других записях:',
-                style: TextStyle(fontSize: 14),
-              ),
-              const SizedBox(height: 8),
-              if (w.cargoIds.isNotEmpty)
-                Text(
-                  '• Грузов на складе: ${w.cargoIds.length}',
-                  style: const TextStyle(fontSize: 14),
-                ),
-              if (w.routeIds.isNotEmpty)
-                Text(
-                  '• Маршрутов через склад: ${w.routeIds.length}',
-                  style: const TextStyle(fontSize: 14),
-                ),
-              const SizedBox(height: 12),
-              const Text(
-                'Сначала удалите или переназначьте связанные записи.',
-                style: TextStyle(fontSize: 14, color: Colors.grey),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
+  Future<void> _hardDelete(BuildContext context, Warehouse w) async {
+    final blockers = await EntityDependencies.forWarehouse(context, w.id);
+
+    if (blockers.isNotEmpty) {
+      if (!context.mounted) return;
+      await showCannotDeleteDialog(
+        context,
+        entityName: w.name,
+        blockers: blockers,
       );
       return;
     }
@@ -315,14 +272,7 @@ class WarehouseDetailScreen extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text(
-          'Удалить склад навсегда?',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          'Это действие нельзя отменить!',
-          style: TextStyle(fontSize: 14),
-        ),
+        title: const Text('Удалить навсегда?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -330,75 +280,30 @@ class WarehouseDetailScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Удалить навсегда',
-              style: TextStyle(color: Colors.red),
-            ),
+            child: const Text('Удалить'),
           ),
         ],
       ),
     );
     if (confirmed != true) return;
     if (!context.mounted) return;
-
-    try {
-      final repo = Provider.of<WarehouseRepository>(context, listen: false);
-      await repo.hardDelete(w.id);
-    } on ApiException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-      }
-      return;
-    }
-
+    final repo = Provider.of<WarehouseRepository>(context, listen: false);
+    await repo.hardDelete(w.id);
     if (!context.mounted) return;
-    final notifier = Provider.of<WarehouseListNotifier>(
-      context,
-      listen: false,
-    );
+    final notifier =
+        Provider.of<WarehouseListNotifier>(context, listen: false);
     await notifier.load();
     if (!context.mounted) return;
     context.go('/warehouses');
   }
 
-  Future<void> _restore(BuildContext context, int id) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Восстановить склад?'),
-        content: const Text('Склад снова появится в списке.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Восстановить'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
+  Future<void> _restore(BuildContext context, String id) async {
     if (!context.mounted) return;
-
-    try {
-      final repo = Provider.of<WarehouseRepository>(context, listen: false);
-      await repo.restore(id);
-    } on ApiException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-      }
-      return;
-    }
-
+    final repo = Provider.of<WarehouseRepository>(context, listen: false);
+    await repo.restore(id);
     if (!context.mounted) return;
-    final notifier = Provider.of<WarehouseListNotifier>(
-      context,
-      listen: false,
-    );
+    final notifier =
+        Provider.of<WarehouseListNotifier>(context, listen: false);
     await notifier.load();
     if (!context.mounted) return;
     context.go('/warehouses');

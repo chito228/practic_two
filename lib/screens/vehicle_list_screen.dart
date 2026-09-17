@@ -2,22 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 
-import '../core/api_exceptions.dart';
 import '../models/role.dart';
+import '../models/vehicle.dart';
 import '../state/auth_notifier.dart';
 import '../state/vehicle_list_notifier.dart';
 import '../state/vehicle_query.dart';
-import '../models/vehicle.dart';
+import '../state/load_status.dart';
+import '../repositories/vehicle_repository.dart';
 import '../widgets/entity_table.dart';
 import '../widgets/responsive_list.dart';
 import '../widgets/error_view.dart';
 import '../widgets/empty_view.dart';
 import '../widgets/main_scaffold.dart';
 import '../widgets/pagination_controls.dart';
+import '../widgets/cannot_delete_dialog.dart';
 import '../utils/debounce.dart';
-import '../state/load_status.dart';
-import '../repositories/vehicle_repository.dart';
-import '../repositories/route_repository.dart';
+import '../utils/entity_dependencies.dart';
 
 class VehicleListScreen extends StatefulWidget {
   const VehicleListScreen({super.key});
@@ -67,14 +67,14 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
               ),
             ),
           ),
-        if (notifier.hasSelection && auth.uiHasExactly(Role.logist))
+        if (notifier.hasSelection && auth.uiCanSoftDelete)
           IconButton(
             icon: const Icon(Icons.delete_outline),
             tooltip: 'Удалить выбранные',
             onPressed: () => _confirmDelete(context, notifier),
           ),
       ],
-      floatingActionButton: auth.uiHasExactly(Role.logist)
+      floatingActionButton: auth.uiCanEditBusiness
           ? FloatingActionButton(
               onPressed: () => context.go('/vehicles/create'),
               tooltip: 'Создать транспорт',
@@ -167,7 +167,9 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
                     ),
                   if (notifier.query.status != null)
                     ActionChip(
-                      label: Text('Статус: ${_statusText(notifier.query.status!)}'),
+                      label: Text(
+                        'Статус: ${_statusText(notifier.query.status!)}',
+                      ),
                       onPressed: () {
                         notifier.applyQuery(
                           notifier.query.copyWith(
@@ -228,11 +230,13 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
       case LoadStatus.idle:
       case LoadStatus.loading:
         return const Center(child: CircularProgressIndicator());
+
       case LoadStatus.error:
         return ErrorView(
           message: notifier.error,
           onRetry: () => notifier.load(),
         );
+
       case LoadStatus.success:
         if (notifier.result.items.isEmpty) {
           return const EmptyView(message: 'Нет транспорта');
@@ -242,8 +246,16 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
           cardBuilder: (v) => Card(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: ListTile(
-              title: Text(v.plateNumber, maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text(v.driverName, maxLines: 1, overflow: TextOverflow.ellipsis),
+              title: Text(
+                v.plateNumber,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                v.driverName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               trailing: Text('${v.capacity} т'),
               onTap: () => context.go('/vehicles/${v.id}'),
             ),
@@ -252,7 +264,7 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
             items: items,
             idOf: (v) => v.id,
             selected: notifier.selected,
-            onToggleSelect: auth.uiHasExactly(Role.logist)
+            onToggleSelect: auth.uiCanSoftDelete
                 ? notifier.toggleSelection
                 : null,
             sortField: notifier.query.sortField,
@@ -294,28 +306,31 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
                 onPressed: () => context.go('/vehicles/${v.id}'),
                 child: const Text('Показать', style: TextStyle(fontSize: 12)),
               ),
-              if (auth.uiHasExactly(Role.logist) && !v.isDeleted)
+              if (auth.uiCanEditBusiness && !v.isDeleted)
                 TextButton(
                   onPressed: () => context.go('/vehicles/${v.id}/edit'),
                   child: const Text('Ред.', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHasExactly(Role.logist) && !v.isDeleted)
+              if (auth.uiCanSoftDelete && !v.isDeleted)
                 TextButton(
                   onPressed: () => _softDelete(context, v.id),
                   style: TextButton.styleFrom(foregroundColor: Colors.orange),
                   child: const Text('Скрыть', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHasExactly(Role.admin) && !v.isDeleted)
+              if (auth.uiCanHardDelete && !v.isDeleted)
                 TextButton(
-                  onPressed: () => _hardDelete(context, v.id),
+                  onPressed: () => _hardDelete(context, v),
                   style: TextButton.styleFrom(foregroundColor: Colors.red),
                   child: const Text('Удалить', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHasExactly(Role.admin) && v.isDeleted)
+              if (auth.uiCanHardDelete && v.isDeleted)
                 TextButton(
                   onPressed: () => _restore(context, v.id),
                   style: TextButton.styleFrom(foregroundColor: Colors.green),
-                  child: const Text('Восстановить', style: TextStyle(fontSize: 12)),
+                  child: const Text(
+                    'Восстановить',
+                    style: TextStyle(fontSize: 12),
+                  ),
                 ),
             ],
           ),
@@ -323,7 +338,7 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
     }
   }
 
-  Future<void> _softDelete(BuildContext context, int id) async {
+  Future<void> _softDelete(BuildContext context, String id) async {
     final c = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -343,41 +358,26 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
     );
     if (c != true) return;
     if (!context.mounted) return;
-    try {
-      final r = Provider.of<VehicleRepository>(context, listen: false);
-      await r.softDelete(id);
-    } on ApiException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-      }
-      return;
-    }
+    final r = Provider.of<VehicleRepository>(context, listen: false);
+    await r.softDelete(id);
     if (!context.mounted) return;
     final n = Provider.of<VehicleListNotifier>(context, listen: false);
     await n.load();
   }
 
-  Future<void> _hardDelete(BuildContext context, int id) async {
-    final rr = Provider.of<RouteRepository>(context, listen: false);
-    final routes = await rr.findByVehicleId(id);
-    if (!context.mounted) return;
-    if (routes.isNotEmpty) {
-      await showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Невозможно удалить'),
-          content: Text('Используется в ${routes.length} маршрутах.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
+  Future<void> _hardDelete(BuildContext context, Vehicle vehicle) async {
+    final blockers = await EntityDependencies.forVehicle(context, vehicle.id);
+
+    if (blockers.isNotEmpty) {
+      if (!context.mounted) return;
+      await showCannotDeleteDialog(
+        context,
+        entityName: vehicle.plateNumber,
+        blockers: blockers,
       );
       return;
     }
+
     final c = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -390,64 +390,35 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить', style: TextStyle(color: Colors.red)),
+            child: const Text(
+              'Удалить',
+              style: TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
     );
     if (c != true) return;
     if (!context.mounted) return;
-    try {
-      final r = Provider.of<VehicleRepository>(context, listen: false);
-      await r.hardDelete(id);
-    } on ApiException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-      }
-      return;
-    }
+    final r = Provider.of<VehicleRepository>(context, listen: false);
+    await r.hardDelete(vehicle.id);
     if (!context.mounted) return;
     final n = Provider.of<VehicleListNotifier>(context, listen: false);
     await n.load();
   }
 
-  Future<void> _restore(BuildContext context, int id) async {
-    final c = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Восстановить?'),
-        content: const Text('Транспорт появится в списке.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Восстановить'),
-          ),
-        ],
-      ),
-    );
-    if (c != true) return;
-    if (!context.mounted) return;
-    try {
-      final r = Provider.of<VehicleRepository>(context, listen: false);
-      await r.restore(id);
-    } on ApiException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-      }
-      return;
-    }
+  Future<void> _restore(BuildContext context, String id) async {
+    final r = Provider.of<VehicleRepository>(context, listen: false);
+    await r.restore(id);
     if (!context.mounted) return;
     final n = Provider.of<VehicleListNotifier>(context, listen: false);
     await n.load();
   }
 
-  Future<void> _confirmDelete(BuildContext context, VehicleListNotifier n) async {
+  Future<void> _confirmDelete(
+    BuildContext context,
+    VehicleListNotifier n,
+  ) async {
     final c = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(

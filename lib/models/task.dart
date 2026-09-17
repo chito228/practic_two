@@ -21,7 +21,7 @@ enum TaskPriority {
   String toJson() => name;
 }
 
-/// Статус задачи (workflow).
+/// Статус задачи.
 enum TaskStatus {
   newTask('Новая'),
   inProgress('В работе'),
@@ -59,19 +59,19 @@ enum TaskStatus {
 }
 
 class Task {
-  final int id;
+  final String id;
   final String title;
   final String description;
   final TaskPriority priority;
   final TaskStatus status;
-  final int createdById;
-  final int assignedToId;
-  final int? orderId;
-  final int? routeId;
+  final String createdById;
+  final String assignedToId;
+  final String? orderId;
+  final String? routeId;
   final DateTime createdAt;
   final DateTime? dueDate;
   final String? resolution;
-  final DateTime? deletedAt;
+  final bool isDeleted;
 
   const Task({
     required this.id,
@@ -86,12 +86,9 @@ class Task {
     required this.createdAt,
     this.dueDate,
     this.resolution,
-    this.deletedAt,
+    this.isDeleted = false,
   });
 
-  bool get isDeleted => deletedAt != null;
-
-  /// Просрочена ли задача.
   bool get isOverdue {
     if (dueDate == null) return false;
     if (status == TaskStatus.done || status == TaskStatus.rejected) {
@@ -100,47 +97,22 @@ class Task {
     return DateTime.now().isAfter(dueDate!);
   }
 
-  /// Можно ли перевести задачу в новый статус для роли.
-  bool canTransition(
-    TaskStatus to, {
-    required bool isManager,
-    required bool isLogist,
-  }) {
-    if (isManager) {
-      return status == TaskStatus.newTask && to == TaskStatus.newTask;
-    }
-    if (isLogist) {
-      if (status == TaskStatus.newTask && to == TaskStatus.inProgress) {
-        return true;
-      }
-      if (status == TaskStatus.inProgress && to == TaskStatus.done) {
-        return true;
-      }
-      if (status == TaskStatus.inProgress && to == TaskStatus.rejected) {
-        return true;
-      }
-      return false;
-    }
-    return true; // admin
-  }
-
   Task copyWith({
-    int? id,
+    String? id,
     String? title,
     String? description,
     TaskPriority? priority,
     TaskStatus? status,
-    int? createdById,
-    int? assignedToId,
-    int? orderId,
-    int? routeId,
+    String? createdById,
+    String? assignedToId,
+    String? orderId,
+    String? routeId,
     bool clearOrder = false,
     bool clearRoute = false,
     DateTime? createdAt,
     DateTime? dueDate,
     String? resolution,
-    DateTime? deletedAt,
-    bool clearDeletedAt = false,
+    bool? isDeleted,
   }) {
     return Task(
       id: id ?? this.id,
@@ -155,45 +127,42 @@ class Task {
       createdAt: createdAt ?? this.createdAt,
       dueDate: dueDate ?? this.dueDate,
       resolution: resolution ?? this.resolution,
-      deletedAt: clearDeletedAt ? null : (deletedAt ?? this.deletedAt),
+      isDeleted: isDeleted ?? this.isDeleted,
     );
   }
 
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'title': title,
-    'description': description,
-    'priority': priority.toJson(),
-    'status': status.toJson(),
-    'createdById': createdById,
-    'assignedToId': assignedToId,
-    'orderId': orderId,
-    'routeId': routeId,
-    'createdAt': createdAt.toIso8601String(),
-    'dueDate': dueDate?.toIso8601String(),
-    'resolution': resolution,
-    'deletedAt': deletedAt?.toIso8601String(),
-  };
-
   factory Task.fromJson(Map<String, dynamic> json) => Task(
-    id: json['id'] as int? ?? 0,
+    id: json['id'] as String? ?? '',
     title: json['title'] as String? ?? '',
     description: json['description'] as String? ?? '',
     priority: TaskPriority.fromString(json['priority'] as String?),
     status: TaskStatus.fromString(json['status'] as String?),
-    createdById: json['createdById'] as int? ?? 0,
-    assignedToId: json['assignedToId'] as int? ?? 0,
-    orderId: json['orderId'] as int?,
-    routeId: json['routeId'] as int?,
-    createdAt: json['createdAt'] == null
+    createdById: json['createdBy'] as String? ?? '',
+    assignedToId: json['assignedTo'] as String? ?? '',
+    orderId: json['order'] as String?,
+    routeId: json['route'] as String?,
+    createdAt: json['created'] == null
         ? DateTime.now()
-        : DateTime.parse(json['createdAt'] as String),
+        : DateTime.parse(json['created'] as String),
     dueDate: json['dueDate'] == null
         ? null
         : DateTime.parse(json['dueDate'] as String),
-    resolution: json['resolution'] as String?,
-    deletedAt: json['deletedAt'] == null
+    resolution: (json['resolution'] as String?)?.isEmpty == true
         ? null
-        : DateTime.parse(json['deletedAt'] as String),
+        : json['resolution'] as String?,
+    isDeleted: json['deleted'] as bool? ?? false,
   );
+
+  Map<String, dynamic> toJson() => {
+    'title': title,
+    'description': description,
+    'priority': priority.toJson(),
+    'status': status.toJson(),
+    'createdBy': createdById,
+    'assignedTo': assignedToId,
+    'order': orderId,
+    'route': routeId,
+    'dueDate': dueDate?.toIso8601String(),
+    'resolution': resolution,
+  };
 }

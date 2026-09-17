@@ -2,7 +2,7 @@
 class WarehouseQuery {
   final String search;
   final String? type;
-  final int? managerId;
+  final String? managerId;      // было int?
   final String sortField;
   final bool sortAscending;
   final int page;
@@ -23,7 +23,7 @@ class WarehouseQuery {
   WarehouseQuery copyWith({
     String? search,
     String? type,
-    int? managerId,
+    String? managerId,
     bool clearType = false,
     bool clearManager = false,
     String? sortField,

@@ -1,6 +1,5 @@
 import '../models/role.dart';
 
-/// Параметры запроса списка пользователей.
 class UserQuery {
   final String search;
   final Role? role;
@@ -41,6 +40,5 @@ class UserQuery {
     );
   }
 
-  bool get hasFilters =>
-      search.isNotEmpty || role != null || includeDeleted;
+  bool get hasFilters => search.isNotEmpty || role != null || includeDeleted;
 }

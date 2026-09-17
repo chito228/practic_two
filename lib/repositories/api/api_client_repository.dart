@@ -6,34 +6,38 @@ import '../client_repository.dart';
 import '../../state/client_query.dart';
 import '../../state/page_result.dart';
 
-/// Реализация ClientRepository через HTTP API (Dio).
+/// Реализация ClientRepository через REST API PocketBase.
+///
+/// Коллекция: `clients`.
+/// Эндпоинты: `/api/collections/clients/records`.
 class ApiClientRepository implements ClientRepository {
   final Dio _dio;
   ApiClientRepository(this._dio);
+
+  static const _path = '/api/collections/clients/records';
 
   @override
   Future<List<Client>> findAll({bool includeDeleted = false}) {
     return guard(() async {
       final response = await _dio.get<Map<String, dynamic>>(
-        '/clients',
+        _path,
         queryParameters: {
-          if (includeDeleted) 'includeDeleted': true,
-          'size': 100,
+          'perPage': 200,
+          if (!includeDeleted) 'filter': '(deleted = false)',
         },
       );
-      final data = response.data!;
-      return (data['items'] as List? ?? [])
-          .whereType<Map<String, dynamic>>()
+      return (response.data!['items'] as List)
+          .cast<Map<String, dynamic>>()
           .map(Client.fromJson)
           .toList();
     });
   }
 
   @override
-  Future<Client?> findById(int id) {
+  Future<Client?> findById(String id) {
     return guard(() async {
       try {
-        final response = await _dio.get<Map<String, dynamic>>('/clients/$id');
+        final response = await _dio.get<Map<String, dynamic>>('$_path/$id');
         return Client.fromJson(response.data!);
       } on DioException catch (e) {
         if (e.response?.statusCode == 404) return null;
@@ -48,26 +52,38 @@ class ApiClientRepository implements ClientRepository {
     CancelToken? cancelToken,
   }) {
     return guard(() async {
+      // PocketBase-фильтр: объединяем soft-delete и поиск.
+      final filters = <String>[];
+      if (!query.includeDeleted) filters.add('(deleted = false)');
+
+      final search = query.search.trim();
+      if (search.isNotEmpty) {
+        filters.add(
+          '(companyName ~ "${search}" || '
+          'contactPerson ~ "${search}" || '
+          'email ~ "${search}")',
+        );
+      }
+
       final response = await _dio.get<Map<String, dynamic>>(
-        '/clients',
+        _path,
         cancelToken: cancelToken,
         queryParameters: {
-          if (query.search.trim().isNotEmpty) 'search': query.search.trim(),
-          'sort': '${query.sortField},${query.sortAscending ? 'asc' : 'desc'}',
+          if (filters.isNotEmpty) 'filter': filters.join(' && '),
+          'sort': '${query.sortAscending ? '' : '-'}${query.sortField}',
           'page': query.page,
-          'size': query.size,
-          if (query.includeDeleted) 'includeDeleted': true,
+          'perPage': query.size,
         },
       );
       final data = response.data!;
       return PageResult(
-        items: (data['items'] as List? ?? [])
-            .whereType<Map<String, dynamic>>()
+        items: (data['items'] as List)
+            .cast<Map<String, dynamic>>()
             .map(Client.fromJson)
             .toList(),
         page: data['page'] as int? ?? 1,
-        size: data['size'] as int? ?? query.size,
-        total: data['total'] as int? ?? 0,
+        size: data['perPage'] as int? ?? query.size,
+        total: data['totalItems'] as int? ?? 0,
       );
     });
   }
@@ -76,8 +92,8 @@ class ApiClientRepository implements ClientRepository {
   Future<Client> create(Client item) {
     return guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(
-        '/clients',
-        data: _toApiJson(item),
+        _path,
+        data: item.toJson(),
       );
       return Client.fromJson(response.data!);
     });
@@ -86,51 +102,43 @@ class ApiClientRepository implements ClientRepository {
   @override
   Future<Client> update(Client item) {
     return guard(() async {
-      final response = await _dio.put<Map<String, dynamic>>(
-        '/clients/${item.id}',
-        data: _toApiJson(item),
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '$_path/${item.id}',
+        data: item.toJson(),
       );
       return Client.fromJson(response.data!);
     });
   }
 
   @override
-  Future<void> softDelete(int id) {
+  Future<void> softDelete(String id) {
     return guard(() async {
-      await _dio.delete<void>('/clients/$id');
+      await _dio.patch<void>('$_path/$id', data: {'deleted': true});
     });
   }
 
   @override
-  Future<void> hardDelete(int id) {
+  Future<void> hardDelete(String id) {
     return guard(() async {
-      await _dio.delete<void>('/clients/$id', queryParameters: {'hard': true});
+      await _dio.delete<void>('$_path/$id');
     });
   }
 
   @override
-  Future<void> restore(int id) {
+  Future<void> restore(String id) {
     return guard(() async {
-      await _dio.post<void>('/clients/$id/restore');
+      await _dio.patch<void>('$_path/$id', data: {'deleted': false});
     });
   }
 
   @override
-  Future<int> deleteMany(List<int> ids) {
+  Future<int> deleteMany(List<String> ids) {
     return guard(() async {
-      final response = await _dio.post<Map<String, dynamic>>(
-        '/clients/bulk-delete',
-        data: {'ids': ids},
-      );
-      return response.data!['deleted'] as int? ?? 0;
+      // PocketBase не имеет bulk-эндпоинта — делаем цикл.
+      for (final id in ids) {
+        await _dio.patch<void>('$_path/$id', data: {'deleted': true});
+      }
+      return ids.length;
     });
   }
-
-  Map<String, dynamic> _toApiJson(Client item) => {
-    'companyName': item.companyName,
-    'contactPerson': item.contactPerson,
-    'phone': item.phone,
-    'email': item.email,
-    'address': item.address,
-  };
 }

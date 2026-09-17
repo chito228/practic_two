@@ -10,10 +10,9 @@ import '../repositories/task_repository.dart';
 import '../repositories/user_repository.dart';
 import '../state/auth_notifier.dart';
 import '../state/task_list_notifier.dart';
-import '../widgets/task_status_chip.dart';
 
 class TaskDetailScreen extends StatelessWidget {
-  final int id;
+  final String id;
   const TaskDetailScreen({super.key, required this.id});
 
   @override
@@ -21,7 +20,7 @@ class TaskDetailScreen extends StatelessWidget {
     final repository = Provider.of<TaskRepository>(context);
     final auth = context.watch<AuthNotifier>();
 
-    return FutureBuilder(
+    return FutureBuilder<Task?>(
       future: repository.findById(id),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -41,13 +40,20 @@ class TaskDetailScreen extends StatelessWidget {
           future: context.read<UserRepository>().findAll(),
           builder: (context, usersSnap) {
             final users = usersSnap.data ?? <AppUser>[];
-            String userName(int id) {
+            String userName(String id) {
               try {
                 return users.firstWhere((u) => u.id == id).fullName;
               } catch (_) {
                 return 'ID: $id';
               }
             }
+
+            // Кто может менять статус:
+            //   - logist: только для своих переходов;
+            //   - manager/admin: без ограничений.
+            // Здесь оставляем строго логиста, чтобы не ломать бизнес-логику.
+            final canChangeStatus =
+                auth.uiHasExactly(Role.logist) && !t.isDeleted;
 
             return Scaffold(
               appBar: AppBar(title: Text(t.title)),
@@ -57,11 +63,17 @@ class TaskDetailScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _infoRow('ID', t.id.toString()),
+                      _infoRow('ID', t.id),
                       _infoRow('Название', t.title),
                       _infoRow('Описание', t.description),
                       _infoRow('Приоритет', t.priority.label),
-                      _infoRow('Статус', t.status.label),
+
+                      // ─── Статус: dropdown для логиста, текст для остальных ───
+                      if (canChangeStatus)
+                        _statusDropdown(context, t)
+                      else
+                        _infoRow('Статус', t.status.label),
+
                       _infoRow('Создана', userName(t.createdById)),
                       _infoRow('Назначена', userName(t.assignedToId)),
                       _infoRow(
@@ -85,51 +97,18 @@ class TaskDetailScreen extends StatelessWidget {
                         runSpacing: 12,
                         alignment: WrapAlignment.center,
                         children: [
-                          // «Назад» — все роли.
                           ElevatedButton(
                             onPressed: () => context.go('/tasks'),
                             child: const Text('Назад'),
                           ),
-                          // «Редактировать» — только manager (не logist).
-                          if (auth.uiHasExactly(Role.manager) &&
+                          if (auth.uiCanEditTasks &&
                               t.status == TaskStatus.newTask)
                             ElevatedButton(
                               onPressed: () =>
                                   context.go('/tasks/${t.id}/edit'),
                               child: const Text('Редактировать'),
                             ),
-                          // «Взять в работу» — только logist.
-                          if (auth.uiHasExactly(Role.logist) &&
-                              t.status == TaskStatus.newTask)
-                            ElevatedButton(
-                              onPressed: () => _changeStatus(
-                                context,
-                                t,
-                                TaskStatus.inProgress,
-                              ),
-                              child: const Text('Взять в работу'),
-                            ),
-                          // «Выполнено» — только logist.
-                          if (auth.uiHasExactly(Role.logist) &&
-                              t.status == TaskStatus.inProgress)
-                            ElevatedButton(
-                              onPressed: () =>
-                                  _changeStatus(context, t, TaskStatus.done),
-                              child: const Text('Выполнено'),
-                            ),
-                          // «Отклонить» — только logist.
-                          if (auth.uiHasExactly(Role.logist) &&
-                              t.status == TaskStatus.inProgress)
-                            ElevatedButton(
-                              onPressed: () => _changeStatus(
-                                context,
-                                t,
-                                TaskStatus.rejected,
-                              ),
-                              child: const Text('Отклонить'),
-                            ),
-                          // «Удалить» — только admin.
-                          if (auth.uiHasExactly(Role.admin))
+                          if (auth.uiCanHardDelete)
                             ElevatedButton(
                               onPressed: () => _hardDelete(context, t.id),
                               child: const Text('Удалить'),
@@ -145,6 +124,76 @@ class TaskDetailScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  /// Компактный выпадающий список статуса для логиста.
+  /// Ширина ограничена 220 px, чтобы не растягивался на всю строку.
+  Widget _statusDropdown(BuildContext context, Task t) {
+    final options = _allowedStatuses(t.status);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const SizedBox(
+            width: 140,
+            child: Text(
+              'Статус:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 220),
+            child: DropdownButtonFormField<TaskStatus>(
+              value: t.status,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                isDense: true,
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              items: options
+                  .map(
+                    (s) => DropdownMenuItem<TaskStatus>(
+                      value: s,
+                      child: Text(
+                        s.label,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (newStatus) {
+                if (newStatus == null || newStatus == t.status) return;
+                _changeStatus(context, t, newStatus);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Допустимые переходы из текущего статуса.
+  /// В список всегда включаем текущий статус, чтобы dropdown
+  /// показывал актуальное значение.
+  List<TaskStatus> _allowedStatuses(TaskStatus current) {
+    switch (current) {
+      case TaskStatus.newTask:
+        return const [TaskStatus.newTask, TaskStatus.inProgress];
+      case TaskStatus.inProgress:
+        return const [
+          TaskStatus.inProgress,
+          TaskStatus.done,
+          TaskStatus.rejected,
+        ];
+      case TaskStatus.done:
+      case TaskStatus.rejected:
+        // Из финальных статусов переходов нет — только текущий.
+        return [current];
+    }
   }
 
   Widget _infoRow(String label, String value, {Color color = Colors.black}) {
@@ -175,14 +224,14 @@ class TaskDetailScreen extends StatelessWidget {
     );
   }
 
+  /// Смена статуса. Для `done` и `rejected` — диалог с комментарием.
   Future<void> _changeStatus(
     BuildContext context,
     Task task,
     TaskStatus newStatus,
   ) async {
     String? resolution;
-    if (newStatus == TaskStatus.done ||
-        newStatus == TaskStatus.rejected) {
+    if (newStatus == TaskStatus.done || newStatus == TaskStatus.rejected) {
       final controller = TextEditingController();
       final result = await showDialog<String>(
         context: context,
@@ -233,10 +282,13 @@ class TaskDetailScreen extends StatelessWidget {
     final notifier = Provider.of<TaskListNotifier>(context, listen: false);
     await notifier.load();
     if (!context.mounted) return;
-    context.go('/tasks');
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Статус изменён на «${newStatus.label}»')),
+    );
   }
 
-  Future<void> _hardDelete(BuildContext context, int id) async {
+  Future<void> _hardDelete(BuildContext context, String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(

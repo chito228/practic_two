@@ -5,19 +5,18 @@ import '../state/client_query.dart';
 import '../state/page_result.dart';
 
 /// Интерфейс репозитория клиентов.
-/// Реализации: PersistentClientRepository (localStorage)
-/// и ApiClientRepository (HTTP + Dio).
+/// Реализация — ApiClientRepository (HTTP + Dio к PocketBase).
 abstract class ClientRepository {
   Future<List<Client>> findAll({bool includeDeleted = false});
-  Future<Client?> findById(int id);
+  Future<Client?> findById(String id);
   Future<PageResult<Client>> find(
     ClientQuery query, {
     CancelToken? cancelToken,
   });
   Future<Client> create(Client item);
   Future<Client> update(Client item);
-  Future<void> softDelete(int id);
-  Future<void> hardDelete(int id);
-  Future<void> restore(int id);
-  Future<int> deleteMany(List<int> ids);
+  Future<void> softDelete(String id);
+  Future<void> hardDelete(String id);
+  Future<void> restore(String id);
+  Future<int> deleteMany(List<String> ids);
 }

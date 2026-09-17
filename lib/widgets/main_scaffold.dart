@@ -19,9 +19,38 @@ class MainNavItem {
 }
 
 List<MainNavItem> navItemsFor(AuthNotifier auth) {
-  // Admin видит ТОЛЬКО раздел «Пользователи».
+  // ─── Общий пункт для всех ролей ──────────────────
+  const home = MainNavItem(icon: Icons.home, label: 'Главная', route: '/');
+
+  // ─── Админ ───────────────────────────────────────
+  // Видит все бизнес-разделы + Пользователи.
+  // НЕ видит: Диспетчерскую (только logist) и Статистику (только manager).
   if (auth.uiHasExactly(Role.admin)) {
     return const [
+      home,
+      MainNavItem(icon: Icons.people, label: 'Клиенты', route: '/clients'),
+      MainNavItem(
+        icon: Icons.receipt_long,
+        label: 'Заказы',
+        route: '/orders',
+      ),
+      MainNavItem(icon: Icons.inventory_2, label: 'Грузы', route: '/cargo'),
+      MainNavItem(icon: Icons.route, label: 'Маршруты', route: '/routes'),
+      MainNavItem(
+        icon: Icons.local_shipping,
+        label: 'Транспорт',
+        route: '/vehicles',
+      ),
+      MainNavItem(
+        icon: Icons.warehouse,
+        label: 'Склады',
+        route: '/warehouses',
+      ),
+      MainNavItem(
+        icon: Icons.task_alt,
+        label: 'Задачи',
+        route: '/tasks',
+      ),
       MainNavItem(
         icon: Icons.manage_accounts,
         label: 'Пользователи',
@@ -30,7 +59,9 @@ List<MainNavItem> navItemsFor(AuthNotifier auth) {
     ];
   }
 
+  // ─── Manager и logist ────────────────────────────
   return [
+    home,
     if (auth.uiHasExactly(Role.logist))
       const MainNavItem(
         icon: Icons.dashboard,
@@ -92,9 +123,17 @@ class MainScaffold extends StatelessWidget {
 
     int selected = 0;
     final route = currentRoute;
-    if (route != null) {
-      final idx = items.indexWhere((it) => route.startsWith(it.route));
-      if (idx != -1) selected = idx;
+    if (route != null && route != '/') {
+      // Ищем точное совпадение или префикс, исключая «/» — иначе
+      // «/».startsWith('/') даст true и подсветит «Главная» везде.
+      for (var i = 0; i < items.length; i++) {
+        final r = items[i].route;
+        if (r == '/') continue;
+        if (route == r || route.startsWith('$r/')) {
+          selected = i;
+          break;
+        }
+      }
     }
 
     return AdaptiveScaffold(

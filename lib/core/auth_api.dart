@@ -18,26 +18,77 @@ class AuthResult {
   });
 }
 
+/// Обёртка над REST API PocketBase.
+///
+/// Эндпоинты:
+///   POST   /api/collections/users/auth-with-password
+///   POST   /api/collections/users/auth-refresh
+///   POST   /api/collections/users/auth-refresh/logout
+///   GET    /api/collections/users/records
+///   POST   /api/collections/users/records
+///   PATCH  /api/collections/users/records/{id}
+///   DELETE /api/collections/users/records/{id}
 class AuthApi {
   final Dio _dio;
   AuthApi(this._dio);
 
-  /// POST /auth/login
+  static const _usersPath = '/api/collections/users';
+
+  // ─────────────────────────── Авторизация ───────────────────────────
+
+  /// Вход. PocketBase принимает `identity` — это может быть
+  /// email или username (мы настроили оба в Identity fields).
   Future<AuthResult> login({
     required String username,
     required String password,
   }) {
     return guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(
-        '/auth/login',
-        data: {'username': username, 'password': password},
+        '$_usersPath/auth-with-password',
+        data: {'identity': username, 'password': password},
       );
       return _parseAuth(response.data!);
     });
   }
 
-  /// POST /auth/register
-  /// Новый пользователь всегда получает роль manager (минимальные права).
+  /// Обновление токена. В PocketBase access и refresh — один и тот же
+  /// токен, обновляется через `auth-refresh`.
+  Future<AuthResult> refresh(String token) {
+    return guard(() async {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '$_usersPath/auth-refresh',
+        options: Options(headers: {'Authorization': token}),
+      );
+      return _parseAuth(response.data!);
+    });
+  }
+
+  /// Текущий пользователь. Вызывается при старте приложения,
+  /// чтобы восстановить сессию после перезагрузки вкладки.
+  Future<AppUser> me() {
+    return guard(() async {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '$_usersPath/auth-refresh',
+      );
+      return AppUser.fromJson(
+        response.data!['record'] as Map<String, dynamic>,
+      );
+    });
+  }
+
+  /// Выход. В PocketBase достаточно удалить токен на клиенте,
+  /// но дёргаем и серверный logout — на всякий случай.
+  Future<void> logout(String token) {
+    return guard(() async {
+      await _dio.post<void>(
+        '$_usersPath/auth-refresh/logout',
+        options: Options(headers: {'Authorization': token}),
+      );
+    });
+  }
+
+  /// Регистрация. Используется на экране RegisterScreen.
+  /// Новый пользователь получает роль manager (минимальные права).
   Future<AppUser> register({
     required String username,
     required String password,
@@ -46,67 +97,45 @@ class AuthApi {
   }) {
     return guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(
-        '/auth/register',
+        '$_usersPath/records',
         data: {
           'username': username,
           'password': password,
+          'passwordConfirm': password,
           'email': email,
           'fullName': fullName,
+          'role': 'manager',
         },
       );
       return AppUser.fromJson(response.data!);
     });
   }
 
-  /// POST /auth/refresh
-  Future<AuthResult> refresh(String refreshToken) {
-    return guard(() async {
-      final response = await _dio.post<Map<String, dynamic>>(
-        '/auth/refresh',
-        data: {'refreshToken': refreshToken},
-      );
-      return _parseAuth(response.data!);
-    });
-  }
+  // ─────────────────────── Управление пользователями ─────────────────
 
-  /// GET /auth/me
-  Future<AppUser> me() {
-    return guard(() async {
-      final response = await _dio.get<Map<String, dynamic>>('/auth/me');
-      return AppUser.fromJson(response.data!);
-    });
-  }
-
-  /// POST /auth/logout
-  Future<void> logout(String refreshToken) {
-    return guard(() async {
-      await _dio.post<void>(
-        '/auth/logout',
-        data: {'refreshToken': refreshToken},
-      );
-    });
-  }
-
-  /// GET /users — список пользователей (только admin).
-  /// При `includeDeleted: true` возвращает и удалённых.
+  /// Список пользователей.
+  ///
+  /// [includeDeleted] управляет фильтром:
+  ///  - false (по умолчанию) — только активные (`deleted = false`);
+  ///  - true — все, включая скрытых.
   Future<List<AppUser>> listUsers({bool includeDeleted = false}) {
     return guard(() async {
       final response = await _dio.get<Map<String, dynamic>>(
-        '/users',
+        '$_usersPath/records',
         queryParameters: {
-          'size': 100,
-          if (includeDeleted) 'includeDeleted': true,
+          'perPage': 200,
+          if (!includeDeleted) 'filter': '(deleted = false)',
         },
       );
       final data = response.data!;
-      return (data['items'] as List? ?? [])
-          .whereType<Map<String, dynamic>>()
+      return (data['items'] as List)
+          .cast<Map<String, dynamic>>()
           .map(AppUser.fromJson)
           .toList();
     });
   }
 
-  /// POST /users — создание пользователя (только admin).
+  /// Создание пользователя (только admin).
   Future<AppUser> createUser({
     required String username,
     required String password,
@@ -116,12 +145,13 @@ class AuthApi {
   }) {
     return guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(
-        '/users',
+        '$_usersPath/records',
         data: {
           'username': username,
           'password': password,
-          'fullName': fullName,
+          'passwordConfirm': password,
           'email': email,
+          'fullName': fullName,
           'role': role.toJson(),
         },
       );
@@ -129,9 +159,9 @@ class AuthApi {
     });
   }
 
-  /// PATCH /users/{id} — смена роли или данных (только admin).
+  /// Редактирование пользователя (только admin).
   Future<AppUser> updateUser({
-    required int id,
+    required String id,
     String? fullName,
     String? email,
     String? password,
@@ -139,11 +169,12 @@ class AuthApi {
   }) {
     return guard(() async {
       final response = await _dio.patch<Map<String, dynamic>>(
-        '/users/$id',
+        '$_usersPath/records/$id',
         data: {
           if (fullName != null) 'fullName': fullName,
           if (email != null) 'email': email,
           if (password != null) 'password': password,
+          if (password != null) 'passwordConfirm': password,
           if (role != null) 'role': role.toJson(),
         },
       );
@@ -151,45 +182,49 @@ class AuthApi {
     });
   }
 
-  /// DELETE /users/{id} — мягкое удаление (только admin).
-  /// Пользователь скрывается, но запись остаётся. Можно восстановить.
-  Future<void> deleteUser(int id) {
+  /// Soft-delete: пользователь скрывается, но запись остаётся.
+  /// Войти под ним нельзя, но данные не теряются.
+  Future<void> softDeleteUser(String id) {
     return guard(() async {
-      await _dio.delete<void>('/users/$id');
-    });
-  }
-
-  /// DELETE /users/{id}?hard=true — физическое удаление (только admin).
-  /// Запись стирается безвозвратно. Нельзя восстановить.
-  Future<void> hardDeleteUser(int id) {
-    return guard(() async {
-      await _dio.delete<void>(
-        '/users/$id',
-        queryParameters: {'hard': true},
+      await _dio.patch<void>(
+        '$_usersPath/records/$id',
+        data: {'deleted': true},
       );
     });
   }
 
-  /// POST /users/{id}/restore — восстановление (только admin).
-  /// Возвращает ранее скрытого пользователя в активные.
-  Future<void> restoreUser(int id) {
+  /// Восстановление ранее скрытого пользователя.
+  Future<void> restoreUser(String id) {
     return guard(() async {
-      await _dio.post<void>('/users/$id/restore');
+      await _dio.patch<void>(
+        '$_usersPath/records/$id',
+        data: {'deleted': false},
+      );
     });
   }
 
-  /// Внутренний разбор ответа /auth/login и /auth/refresh.
+  /// Физическое удаление пользователя — необратимо.
+  /// Используется только для уже скрытых пользователей.
+  Future<void> hardDeleteUser(String id) {
+    return guard(() async {
+      await _dio.delete<void>('$_usersPath/records/$id');
+    });
+  }
+
+  // ─────────────────────────── Разбор ответа ─────────────────────────
+
   AuthResult _parseAuth(Map<String, dynamic> data) {
-    final access = data['accessToken'] as String?;
-    final refresh = data['refreshToken'] as String?;
-    if (access == null || refresh == null) {
-      throw const UnauthorizedException('Сервер не вернул токены.');
+    final token = data['token'] as String?;
+    if (token == null) {
+      throw const UnauthorizedException('Сервер не вернул токен.');
     }
     return AuthResult(
-      accessToken: access,
-      refreshToken: refresh,
-      expiresIn: data['expiresIn'] as int? ?? 900,
-      user: AppUser.fromJson(data['user'] as Map<String, dynamic>),
+      accessToken: token,
+      // PocketBase не отдаёт отдельный refresh-токен;
+      // используем тот же — `auth-refresh` принимает его в заголовке.
+      refreshToken: token,
+      expiresIn: 3600,
+      user: AppUser.fromJson(data['record'] as Map<String, dynamic>),
     );
   }
 }

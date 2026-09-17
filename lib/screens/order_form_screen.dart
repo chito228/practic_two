@@ -16,7 +16,7 @@ import '../widgets/generic_form.dart';
 import '../state/order_list_notifier.dart';
 
 class OrderFormScreen extends StatefulWidget {
-  final int? id;
+  final String? id;
   const OrderFormScreen({super.key, this.id});
 
   bool get isEditing => id != null;
@@ -40,16 +40,11 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
 
   Future<void> _loadData() async {
     try {
-      // Репозитории читаем СИНХРОННО, до первого await.
-      // context.read<T>() нельзя вызывать внутри асинхронных callback'ов
-      // после await — иначе ProviderNotFoundException или зависание.
       final cache = context.read<ReferenceCache>();
       final clientRepo = context.read<ClientRepository>();
       final cargoRepo = context.read<CargoRepository>();
       final routeRepo = context.read<RouteRepository>();
 
-      // Справочники берём из кэша. Первый запрос — HTTP,
-      // повторные — из памяти, без запроса к серверу.
       _clients = await cache.load('clients', () => clientRepo.findAll());
       _cargoList = await cache.load('cargo', () => cargoRepo.findAll());
       _routeList = await cache.load('routes', () => routeRepo.findAll());
@@ -62,11 +57,11 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         if (o != null) _order = o;
       } else {
         _order = Order(
-          id: 0,
+          id: '',
           orderNumber: 'ORD-${DateTime.now().millisecondsSinceEpoch}',
-          clientId: _clients.isNotEmpty ? _clients.first.id : 0,
-          cargoIds: [],
-          routeIds: [],
+          clientId: _clients.isNotEmpty ? _clients.first.id : '',
+          cargoIds: const [],
+          routeIds: const [],
           cargoDescription: '',
           weight: 0.0,
           volume: 0.0,
@@ -75,10 +70,8 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         );
       }
     } catch (e) {
-      // Не пробрасываем: показываем форму с пустыми справочниками.
       debugPrint('Ошибка загрузки справочников: $e');
     } finally {
-      // Гарантированно снимаем индикатор, даже при ошибке.
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -87,17 +80,18 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     final repo = context.read<OrderRepository>();
 
     final order = Order(
-      id: _order?.id ?? 0,
+      id: _order?.id ?? '',
       orderNumber: (values['orderNumber'] as String?) ?? '',
-      clientId: (values['clientId'] as int?) ?? 0,
-      cargoIds: (values['cargoIds'] as List<int>?) ?? [],
-      routeIds: (values['routeIds'] as List<int>?) ?? [],
+      clientId: (values['clientId'] as String?) ?? '',
+      cargoIds: (values['cargoIds'] as List<String>?) ?? const [],
+      routeIds: (values['routeIds'] as List<String>?) ?? const [],
       cargoDescription: (values['cargoDescription'] as String?) ?? '',
       weight: double.tryParse(values['weight']?.toString() ?? '') ?? 0.0,
       volume: double.tryParse(values['volume']?.toString() ?? '') ?? 0.0,
       shippingDate: (values['shippingDate'] as DateTime?) ?? DateTime.now(),
       deliveryDate: values['deliveryDate'] as DateTime?,
       status: (values['status'] as String?) ?? 'in_transit',
+      isDeleted: _order?.isDeleted ?? false,
     );
 
     if (widget.isEditing) {
@@ -109,7 +103,6 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
     if (!mounted) return;
     final notifier = context.read<OrderListNotifier>();
     await notifier.load();
-
     if (mounted) context.go('/orders');
   }
 
@@ -130,8 +123,8 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
       initialValues: {
         'orderNumber': _order?.orderNumber ?? '',
         'clientId': _order?.clientId,
-        'cargoIds': _order?.cargoIds ?? <int>[],
-        'routeIds': _order?.routeIds ?? <int>[],
+        'cargoIds': _order?.cargoIds ?? <String>[],
+        'routeIds': _order?.routeIds ?? <String>[],
         'cargoDescription': _order?.cargoDescription ?? '',
         'weight': _order?.weight.toString() ?? '0',
         'volume': _order?.volume.toString() ?? '0',
@@ -139,7 +132,10 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
         'deliveryDate': _order?.deliveryDate,
         'status': _order?.status ?? 'in_transit',
       },
-      optionsData: {'cargoIds': _cargoList, 'routeIds': _routeList},
+      optionsData: {
+        'cargoIds': _cargoList,
+        'routeIds': _routeList,
+      },
       fields: [
         FormFieldConfig(
           key: 'orderNumber',
@@ -152,8 +148,10 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
           type: FormFieldType.dropdown,
           options: _clients
               .map(
-                (c) =>
-                    DropdownMenuItem(value: c.id, child: Text(c.companyName)),
+                (c) => DropdownMenuItem(
+                  value: c.id,
+                  child: Text(c.companyName),
+                ),
               )
               .toList(),
         ),

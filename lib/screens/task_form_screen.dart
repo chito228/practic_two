@@ -17,7 +17,7 @@ import '../widgets/generic_form.dart';
 import '../state/task_list_notifier.dart';
 
 class TaskFormScreen extends StatefulWidget {
-  final int? id;
+  final String? id;
   const TaskFormScreen({super.key, this.id});
 
   bool get isEditing => id != null;
@@ -58,13 +58,13 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
       } else {
         final currentUser = context.read<AuthNotifier>().user;
         _task = Task(
-          id: 0,
+          id: '',
           title: '',
           description: '',
           priority: TaskPriority.medium,
           status: TaskStatus.newTask,
-          createdById: currentUser?.id ?? 0,
-          assignedToId: _logists.isNotEmpty ? _logists.first.id : 0,
+          createdById: currentUser?.id ?? '',
+          assignedToId: _logists.isNotEmpty ? _logists.first.id : '',
           createdAt: DateTime.now(),
           dueDate: DateTime.now().add(const Duration(days: 7)),
         );
@@ -85,17 +85,18 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
         : TaskPriority.fromString(priorityValue?.toString());
 
     final task = Task(
-      id: _task?.id ?? 0,
+      id: _task?.id ?? '',
       title: (values['title'] as String?) ?? '',
       description: (values['description'] as String?) ?? '',
       priority: priority,
       status: _task?.status ?? TaskStatus.newTask,
-      createdById: _task?.createdById ?? 0,
-      assignedToId: (values['assignedToId'] as int?) ?? 0,
-      orderId: values['orderId'] as int?,
-      routeId: values['routeId'] as int?,
+      createdById: _task?.createdById ?? '',
+      assignedToId: (values['assignedToId'] as String?) ?? '',
+      orderId: values['orderId'] as String?,
+      routeId: values['routeId'] as String?,
       createdAt: _task?.createdAt ?? DateTime.now(),
       dueDate: values['dueDate'] as DateTime?,
+      isDeleted: _task?.isDeleted ?? false,
     );
 
     if (widget.isEditing) {
@@ -164,7 +165,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
           type: FormFieldType.dropdown,
           options: _logists
               .map(
-                (u) => DropdownMenuItem(
+                (u) => DropdownMenuItem<String>(
                   value: u.id,
                   child: Text(u.fullName),
                 ),
@@ -178,7 +179,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
           required: false,
           options: _orders
               .map(
-                (o) => DropdownMenuItem(
+                (o) => DropdownMenuItem<String>(
                   value: o.id,
                   child: Text(o.orderNumber),
                 ),
@@ -192,7 +193,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
           required: false,
           options: _routes
               .map(
-                (r) => DropdownMenuItem(
+                (r) => DropdownMenuItem<String>(
                   value: r.id,
                   child: Text(r.name),
                 ),

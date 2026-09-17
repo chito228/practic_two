@@ -2,7 +2,7 @@
 class RouteQuery {
   final String search;
   final String? status;
-  final int? vehicleId;
+  final String? vehicleId;      // было int? — теперь String?
   final String sortField;
   final bool sortAscending;
   final int page;
@@ -23,7 +23,7 @@ class RouteQuery {
   RouteQuery copyWith({
     String? search,
     String? status,
-    int? vehicleId,
+    String? vehicleId,
     bool clearStatus = false,
     bool clearVehicle = false,
     String? sortField,

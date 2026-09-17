@@ -2,14 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 
-import '../core/api_exceptions.dart';
 import '../models/role.dart';
 import '../repositories/order_repository.dart';
 import '../state/auth_notifier.dart';
 import '../state/order_list_notifier.dart';
+import '../widgets/cannot_delete_dialog.dart';
+import '../utils/entity_dependencies.dart';
 
 class OrderDetailScreen extends StatelessWidget {
-  final int id;
+  final String id;
   const OrderDetailScreen({super.key, required this.id});
 
   @override
@@ -26,27 +27,7 @@ class OrderDetailScreen extends StatelessWidget {
             body: const Center(child: CircularProgressIndicator()),
           );
         }
-
-        if (snapshot.hasError) {
-          return Scaffold(
-            appBar: AppBar(title: const Text('Заказ')),
-            body: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Ошибка загрузки: ${snapshot.error}'),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => context.go('/orders/$id'),
-                    child: const Text('Повторить'),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        if (snapshot.data == null) {
+        if (snapshot.hasError || snapshot.data == null) {
           return Scaffold(
             appBar: AppBar(title: const Text('Заказ')),
             body: const Center(child: Text('Заказ не найден')),
@@ -67,7 +48,7 @@ class OrderDetailScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _infoRow('ID', order.id.toString()),
+                  _infoRow('ID', order.id),
                   _infoRow('Номер заказа', order.orderNumber),
                   _infoRow(
                     'Клиент',
@@ -128,31 +109,25 @@ class OrderDetailScreen extends StatelessWidget {
                         onPressed: () => context.go('/orders'),
                         child: const Text('Назад'),
                       ),
-
-                      // Редактирование — только logist.
-                      if (auth.uiHasExactly(Role.logist))
+                      if (auth.uiCanEditBusiness && !order.isDeleted)
                         ElevatedButton(
                           onPressed: () =>
                               context.go('/orders/${order.id}/edit'),
                           child: const Text('Редактировать'),
                         ),
-
-                      // Скрыть — только logist.
                       if (!order.isDeleted) ...[
-                        if (auth.uiHasExactly(Role.logist))
+                        if (auth.uiCanSoftDelete)
                           ElevatedButton(
                             onPressed: () => _softDelete(context, order.id),
                             child: const Text('Скрыть'),
                           ),
-                        // Удалить навсегда — только admin.
-                        if (auth.uiHasExactly(Role.admin))
+                        if (auth.uiCanHardDelete)
                           ElevatedButton(
-                            onPressed: () => _hardDelete(context, order.id),
+                            onPressed: () => _hardDelete(context, order),
                             child: const Text('Удалить'),
                           ),
                       ] else ...[
-                        // Восстановление — только admin.
-                        if (auth.uiHasExactly(Role.admin))
+                        if (auth.uiCanHardDelete)
                           ElevatedButton(
                             onPressed: () => _restore(context, order.id),
                             child: const Text('Восстановить'),
@@ -210,14 +185,11 @@ class OrderDetailScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _softDelete(BuildContext context, int id) async {
+  Future<void> _softDelete(BuildContext context, String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Скрыть заказ?'),
-        content: const Text(
-          'Заказ будет скрыт, но не удалён. Его можно будет восстановить.',
-        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -232,116 +204,24 @@ class OrderDetailScreen extends StatelessWidget {
     );
     if (confirmed != true) return;
     if (!context.mounted) return;
-
-    try {
-      final repository = Provider.of<OrderRepository>(context, listen: false);
-      await repository.softDelete(id);
-    } on ForbiddenException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-        );
-      }
-      return;
-    } on ConflictException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.orange),
-        );
-      }
-      return;
-    } on ApiException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-        );
-      }
-      return;
-    }
-
+    final repository = Provider.of<OrderRepository>(context, listen: false);
+    await repository.softDelete(id);
     if (!context.mounted) return;
     final notifier = Provider.of<OrderListNotifier>(context, listen: false);
     await notifier.load();
     if (!context.mounted) return;
-
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Заказ скрыт')));
     context.go('/orders');
   }
 
-  Future<void> _hardDelete(BuildContext context, int id) async {
-    final orderRepo = Provider.of<OrderRepository>(context, listen: false);
+  Future<void> _hardDelete(BuildContext context, dynamic order) async {
+    final blockers = await EntityDependencies.forOrder(context, order.id);
 
-    OrderFull? full;
-    try {
-      full = await orderRepo.findByIdWithRelations(id);
-    } on ApiException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-      }
-      return;
-    }
-    if (full == null || !context.mounted) return;
-
-    final related = <String>[];
-
-    if (full.client != null) {
-      related.add('• Клиент: ${full.client!.companyName}');
-    }
-    for (final c in full.cargo) {
-      related.add('• Груз: ${c.name}');
-    }
-    for (final r in full.routes) {
-      related.add('• Маршрут: ${r.name}');
-    }
-    if (!context.mounted) return;
-
-    if (related.isNotEmpty) {
-      await showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text(
-            'Невозможно удалить заказ',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Этот заказ связан со следующими записями:',
-                style: TextStyle(fontSize: 14),
-              ),
-              const SizedBox(height: 8),
-              ...related.map(
-                (item) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2.0),
-                  child: Text(item, style: const TextStyle(fontSize: 14)),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Количество связанных записей: ${related.length}',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Сначала удалите или переназначьте связанные записи, затем попробуйте снова.',
-                style: TextStyle(fontSize: 14, color: Colors.grey),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK', style: TextStyle(fontSize: 14)),
-            ),
-          ],
-        ),
+    if (blockers.isNotEmpty) {
+      if (!context.mounted) return;
+      await showCannotDeleteDialog(
+        context,
+        entityName: order.orderNumber,
+        blockers: blockers,
       );
       return;
     }
@@ -349,74 +229,7 @@ class OrderDetailScreen extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text(
-          'Удалить заказ навсегда?',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          'Это действие нельзя отменить!',
-          style: TextStyle(fontSize: 14),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена', style: TextStyle(fontSize: 14)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Удалить навсегда',
-              style: TextStyle(fontSize: 14, color: Colors.red),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    if (!context.mounted) return;
-
-    try {
-      final repository = Provider.of<OrderRepository>(context, listen: false);
-      await repository.hardDelete(id);
-    } on ForbiddenException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-        );
-      }
-      return;
-    } on ConflictException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.orange),
-        );
-      }
-      return;
-    } on ApiException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-        );
-      }
-      return;
-    }
-
-    if (!context.mounted) return;
-    final notifier = Provider.of<OrderListNotifier>(context, listen: false);
-    await notifier.load();
-    if (!context.mounted) return;
-
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Заказ удалён навсегда')));
-    context.go('/orders');
-  }
-
-  Future<void> _restore(BuildContext context, int id) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Восстановить заказ?'),
-        content: const Text('Заказ снова появится в списке.'),
+        title: const Text('Удалить навсегда?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -424,47 +237,30 @@ class OrderDetailScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Восстановить'),
+            child: const Text('Удалить'),
           ),
         ],
       ),
     );
     if (confirmed != true) return;
     if (!context.mounted) return;
-
-    try {
-      final repository = Provider.of<OrderRepository>(context, listen: false);
-      await repository.restore(id);
-    } on ForbiddenException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-        );
-      }
-      return;
-    } on ConflictException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.orange),
-        );
-      }
-      return;
-    } on ApiException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-        );
-      }
-      return;
-    }
-
+    final repository = Provider.of<OrderRepository>(context, listen: false);
+    await repository.hardDelete(order.id);
     if (!context.mounted) return;
     final notifier = Provider.of<OrderListNotifier>(context, listen: false);
     await notifier.load();
     if (!context.mounted) return;
+    context.go('/orders');
+  }
 
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Заказ восстановлен')));
+  Future<void> _restore(BuildContext context, String id) async {
+    if (!context.mounted) return;
+    final repository = Provider.of<OrderRepository>(context, listen: false);
+    await repository.restore(id);
+    if (!context.mounted) return;
+    final notifier = Provider.of<OrderListNotifier>(context, listen: false);
+    await notifier.load();
+    if (!context.mounted) return;
     context.go('/orders');
   }
 }

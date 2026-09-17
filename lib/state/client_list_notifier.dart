@@ -16,22 +16,17 @@ class ClientListNotifier extends ChangeNotifier {
   PageResult<Client> _result = PageResult.empty();
   LoadStatus _status = LoadStatus.idle;
   String? _error;
-  final Set<int> _selected = {};
-
-  /// Токен текущего поискового запроса.
-  /// При новом запросе отменяем предыдущий, чтобы ответы
-  /// не приходили в неправильном порядке.
+  final Set<String> _selected = {};
   CancelToken? _cancelToken;
 
   ClientQuery get query => _query;
   PageResult<Client> get result => _result;
   LoadStatus get status => _status;
   String? get error => _error;
-  Set<int> get selected => Set.unmodifiable(_selected);
+  Set<String> get selected => Set.unmodifiable(_selected);
   bool get hasSelection => _selected.isNotEmpty;
 
   Future<void> load() async {
-    // Отменяем предыдущий запрос, если он ещё не завершился.
     _cancelToken?.cancel('Новый поисковый запрос');
     _cancelToken = CancelToken();
 
@@ -43,8 +38,6 @@ class ClientListNotifier extends ChangeNotifier {
       _result = await _repository.find(_query, cancelToken: _cancelToken);
       _status = LoadStatus.success;
     } on DioException catch (e) {
-      // Отменённый запрос — не ошибка: просто игнорируем результат.
-      // Новый запрос уже в пути.
       if (CancelToken.isCancel(e)) return;
       _error = 'Не удалось загрузить список клиентов: $e';
       _status = LoadStatus.error;
@@ -61,7 +54,7 @@ class ClientListNotifier extends ChangeNotifier {
     await load();
   }
 
-  void toggleSelection(int id) {
+  void toggleSelection(String id) {
     if (_selected.contains(id)) {
       _selected.remove(id);
     } else {
@@ -78,7 +71,6 @@ class ClientListNotifier extends ChangeNotifier {
 
   @override
   void dispose() {
-    // Отменяем запрос, если нотифаер уничтожается.
     _cancelToken?.cancel('Нотифаер уничтожен');
     super.dispose();
   }

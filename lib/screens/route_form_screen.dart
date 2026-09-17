@@ -11,7 +11,7 @@ import '../widgets/generic_form.dart';
 import '../state/route_list_notifier.dart';
 
 class RouteFormScreen extends StatefulWidget {
-  final int? id;
+  final String? id;
   const RouteFormScreen({super.key, this.id});
 
   bool get isEditing => id != null;
@@ -34,7 +34,6 @@ class _RouteFormScreenState extends State<RouteFormScreen> {
   Future<void> _loadData() async {
     final cache = context.read<ReferenceCache>();
 
-    // Справочник vehicles кэшируется.
     _vehicles = await cache.load('vehicles', () {
       final repo = context.read<VehicleRepository>();
       return repo.findAll();
@@ -48,15 +47,14 @@ class _RouteFormScreenState extends State<RouteFormScreen> {
       if (r != null) _route = r;
     } else {
       _route = model.Route(
-        id: 0,
+        id: '',
         name: '',
         origin: '',
         destination: '',
         distance: 0.0,
-        vehicleId: _vehicles.isNotEmpty ? _vehicles.first.id : 0,
+        vehicleId: _vehicles.isNotEmpty ? _vehicles.first.id : '',
         estimatedTime: 0.0,
         status: 'active',
-        orderIds: [],
       );
     }
     if (mounted) setState(() => _isLoading = false);
@@ -67,16 +65,16 @@ class _RouteFormScreenState extends State<RouteFormScreen> {
     final cache = context.read<ReferenceCache>();
 
     final route = model.Route(
-      id: _route?.id ?? 0,
+      id: _route?.id ?? '',
       name: (values['name'] as String?) ?? '',
       origin: (values['origin'] as String?) ?? '',
       destination: (values['destination'] as String?) ?? '',
       distance: double.tryParse(values['distance']?.toString() ?? '') ?? 0.0,
-      vehicleId: (values['vehicleId'] as int?) ?? 0,
+      vehicleId: (values['vehicleId'] as String?) ?? '',
       estimatedTime:
           double.tryParse(values['estimatedTime']?.toString() ?? '') ?? 0.0,
       status: (values['status'] as String?) ?? 'active',
-      orderIds: _route?.orderIds ?? [],
+      isDeleted: _route?.isDeleted ?? false,
     );
 
     if (widget.isEditing) {
@@ -85,13 +83,10 @@ class _RouteFormScreenState extends State<RouteFormScreen> {
       await repo.create(route);
     }
 
-    // Сбрасываем кэш справочника маршрутов.
     cache.invalidate('routes');
-
     if (!mounted) return;
     final notifier = context.read<RouteListNotifier>();
     await notifier.load();
-
     if (mounted) context.go('/routes');
   }
 
@@ -107,7 +102,9 @@ class _RouteFormScreenState extends State<RouteFormScreen> {
     }
 
     return GenericForm(
-      title: widget.isEditing ? 'Редактирование маршрута' : 'Создание маршрута',
+      title: widget.isEditing
+          ? 'Редактирование маршрута'
+          : 'Создание маршрута',
       isEditing: widget.isEditing,
       initialValues: {
         'name': _route?.name ?? '',

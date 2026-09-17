@@ -1,14 +1,14 @@
+/// Маршрут.
 class Route {
-  final int id;
+  final String id;
   final String name;
   final String origin;
   final String destination;
   final double distance;
-  final int vehicleId;
+  final String vehicleId;      // ID записи в коллекции vehicles
   final double estimatedTime;
   final String status;
-  final List<int> orderIds;
-  final DateTime? deletedAt;
+  final bool isDeleted;
 
   const Route({
     required this.id,
@@ -19,24 +19,19 @@ class Route {
     required this.vehicleId,
     required this.estimatedTime,
     required this.status,
-    required this.orderIds,
-    this.deletedAt,
+    this.isDeleted = false,
   });
 
-  bool get isDeleted => deletedAt != null;
-
   Route copyWith({
-    int? id,
+    String? id,
     String? name,
     String? origin,
     String? destination,
     double? distance,
-    int? vehicleId,
+    String? vehicleId,
     double? estimatedTime,
     String? status,
-    List<int>? orderIds,
-    DateTime? deletedAt,
-    bool clearDeletedAt = false,
+    bool? isDeleted,
   }) {
     return Route(
       id: id ?? this.id,
@@ -47,36 +42,30 @@ class Route {
       vehicleId: vehicleId ?? this.vehicleId,
       estimatedTime: estimatedTime ?? this.estimatedTime,
       status: status ?? this.status,
-      orderIds: orderIds ?? this.orderIds,
-      deletedAt: clearDeletedAt ? null : (deletedAt ?? this.deletedAt),
+      isDeleted: isDeleted ?? this.isDeleted,
     );
   }
 
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
-    'origin': origin,
-    'destination': destination,
-    'distance': distance,
-    'vehicleId': vehicleId,
-    'estimatedTime': estimatedTime,
-    'status': status,
-    'orderIds': orderIds,
-    'deletedAt': deletedAt?.toIso8601String(),
-  };
-
   factory Route.fromJson(Map<String, dynamic> json) => Route(
-    id: json['id'] as int? ?? 0,
+    id: json['id'] as String? ?? '',
     name: json['name'] as String? ?? '',
     origin: json['origin'] as String? ?? '',
     destination: json['destination'] as String? ?? '',
     distance: (json['distance'] as num?)?.toDouble() ?? 0.0,
-    vehicleId: json['vehicleId'] as int? ?? 0,
+    // PocketBase relation приходит как строка ID.
+    vehicleId: json['vehicle'] as String? ?? '',
     estimatedTime: (json['estimatedTime'] as num?)?.toDouble() ?? 0.0,
     status: json['status'] as String? ?? 'active',
-    orderIds: (json['orderIds'] as List?)?.cast<int>() ?? [],
-    deletedAt: json['deletedAt'] == null
-        ? null
-        : DateTime.parse(json['deletedAt'] as String),
+    isDeleted: json['deleted'] as bool? ?? false,
   );
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'origin': origin,
+    'destination': destination,
+    'distance': distance,
+    'vehicle': vehicleId,
+    'estimatedTime': estimatedTime,
+    'status': status,
+  };
 }

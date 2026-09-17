@@ -22,16 +22,8 @@ class AuthNotifier extends ChangeNotifier {
   String? _refreshToken;
   DateTime? _sessionStartedAt;
 
-  /// Причина последнего выхода. Используется на LoginScreen,
-  /// чтобы показать пользователю понятное сообщение.
-  ///   - null         — обычный выход (сообщение не нужно)
-  ///   - 'session'    — истекла общая длительность сессии
-  ///   - 'inactivity' — долго не было действий
-  ///   - 'unauthorized' — токен отклонён сервером
   String? _logoutReason;
 
-  /// Максимальная длительность сессии. По умолчанию — 60 минут.
-  /// ИЗМЕНЕНИЕ: было seconds: 90, исправлено на minutes: 60 в соответствии с комментарием.
   Duration maxSessionDuration = const Duration(minutes: 60);
 
   AppUser? get user => _user;
@@ -42,15 +34,12 @@ class AuthNotifier extends ChangeNotifier {
   DateTime? get sessionStartedAt => _sessionStartedAt;
   String? get logoutReason => _logoutReason;
 
-  /// Истекла ли общая длительность сессии.
   bool get isSessionExpired {
     final started = _sessionStartedAt;
     if (started == null) return false;
     return DateTime.now().difference(started) > maxSessionDuration;
   }
 
-  /// Сколько осталось до истечения сессии.
-  /// null, если сессия не начата.
   Duration? get sessionTimeLeft {
     final started = _sessionStartedAt;
     if (started == null) return null;
@@ -59,7 +48,6 @@ class AuthNotifier extends ChangeNotifier {
     return left.isNegative ? Duration.zero : left;
   }
 
-  /// Реальная проверка прав (используется в роутере и на сервере).
   bool has(Role role) {
     if (_user == null) return false;
     return _user!.role.level >= role.level;
@@ -67,9 +55,6 @@ class AuthNotifier extends ChangeNotifier {
 
   bool hasExactly(Role role) => _user?.role == role;
 
-  /// Роль для отображения UI.
-  /// В обычном режиме — из токена (user.role).
-  /// В debug-режиме (--dart-define=DEBUG_KEEP_ROLE=true) — из localStorage.
   Role? get effectiveRole {
     const debugKeepRole = bool.fromEnvironment(
       'DEBUG_KEEP_ROLE',
@@ -82,7 +67,6 @@ class AuthNotifier extends ChangeNotifier {
     return _user?.role;
   }
 
-  /// Проверка прав для UI (использует effectiveRole).
   bool uiHas(Role role) {
     final r = effectiveRole;
     if (r == null) return false;
@@ -90,6 +74,36 @@ class AuthNotifier extends ChangeNotifier {
   }
 
   bool uiHasExactly(Role role) => effectiveRole == role;
+
+  // ─────────────────────────────────────────────
+  // UI-хелперы для прав доступа
+  // ─────────────────────────────────────────────
+
+  /// Бизнес-разделы могут смотреть admin, manager, logist.
+  bool get uiCanViewBusiness =>
+      uiHasExactly(Role.admin) ||
+      uiHasExactly(Role.manager) ||
+      uiHasExactly(Role.logist);
+
+  /// Бизнес-сущности (clients, orders, cargo, routes, vehicles, warehouses)
+  /// могут создавать/редактировать logist и admin.
+  bool get uiCanEditBusiness =>
+      uiHasExactly(Role.logist) || uiHasExactly(Role.admin);
+
+  /// Задачи могут создавать/редактировать manager и admin.
+  bool get uiCanEditTasks =>
+      uiHasExactly(Role.manager) || uiHasExactly(Role.admin);
+
+  /// Soft-delete («Скрыть») разрешён logist и admin.
+  bool get uiCanSoftDelete =>
+      uiHasExactly(Role.logist) || uiHasExactly(Role.admin);
+
+  /// Hard-delete («Удалить навсегда») и «Восстановить» — только admin.
+  bool get uiCanHardDelete => uiHasExactly(Role.admin);
+
+  // ─────────────────────────────────────────────
+  // Восстановление / вход / выход
+  // ─────────────────────────────────────────────
 
   Future<void> restore() async {
     final access = _prefs.getString(_kAccess);
@@ -136,8 +150,6 @@ class AuthNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Продлить сессию: сбросить отсчёт длительности.
-  /// Используется в диалоге «Сессия скоро истечёт».
   void extendSession() {
     if (_user == null) return;
     _sessionStartedAt = DateTime.now();
@@ -162,8 +174,6 @@ class AuthNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Возвращает причину выхода и сбрасывает её.
-  /// Используется LoginScreen.
   String? consumeLogoutReason() {
     final r = _logoutReason;
     _logoutReason = null;
@@ -193,11 +203,6 @@ class AuthNotifier extends ChangeNotifier {
     await _prefs.setString(_kRefresh, _refreshToken ?? '');
   }
 
-  /// Сохраняем роль в localStorage.
-  ///
-  /// В обычном режиме — всегда пишем актуальную роль из токена.
-  /// В debug-режиме (--dart-define=DEBUG_KEEP_ROLE=true) — НЕ перезаписываем
-  /// уже существующее значение (для демонстрации пункта 17 ПР5).
   Future<void> _persistRole() async {
     final role = _user?.role;
     if (role == null) return;
@@ -213,16 +218,11 @@ class AuthNotifier extends ChangeNotifier {
     await _prefs.setString(_kRole, role.toJson());
   }
 
-  /// Читает сохранённую роль из localStorage.
   Role? get storedRole {
     final s = _prefs.getString(_kRole);
     if (s == null) return null;
     return Role.fromString(s);
   }
-
-  // ─────────────────────────────────────────────
-  // ТОЛЬКО ДЛЯ ТЕСТОВ
-  // ─────────────────────────────────────────────
 
   @visibleForTesting
   void debugSetUser(AppUser user) {

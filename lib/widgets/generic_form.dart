@@ -326,11 +326,13 @@ class _GenericFormState extends State<GenericForm> {
     }
   }
 
+  /// Multi-select: работаем со списком строковых ID —
+  /// PocketBase использует строки (`"u51s8a9bf45x2g5"`), не числа.
   Widget _buildMultiSelectField(FormFieldConfig config) {
-    final selectedIds = (_values[config.key] as List<int>?) ?? [];
+    final selectedIds = (_values[config.key] as List<String>?) ?? [];
     final items = widget.optionsData?[config.key] ?? [];
 
-    return FormField<List<int>>(
+    return FormField<List<String>>(
       initialValue: selectedIds,
       validator: (value) {
         // Сначала серверная ошибка, потом клиентская.
@@ -359,14 +361,19 @@ class _GenericFormState extends State<GenericForm> {
                   spacing: 8,
                   runSpacing: 8,
                   children: items.map((item) {
-                    final id = (item as dynamic).id as int;
+                    // ID всегда строка.
+                    final id = (item as dynamic).id as String;
+
+                    // Имя для отображения берём из первого доступного поля.
                     final name =
                         (item as dynamic).name?.toString() ??
                         (item as dynamic).fullName?.toString() ??
                         (item as dynamic).companyName?.toString() ??
                         (item as dynamic).plateNumber?.toString() ??
                         'ID $id';
+
                     final selected = field.value!.contains(id);
+
                     return FilterChip(
                       label: Text(name),
                       selected: selected,

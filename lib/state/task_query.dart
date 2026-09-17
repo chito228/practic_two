@@ -3,8 +3,8 @@ class TaskQuery {
   final String search;
   final String? status;
   final String? priority;
-  final int? createdById;
-  final int? assignedToId;
+  final String? createdById;    // было int?
+  final String? assignedToId;   // было int?
   final String sortField;
   final bool sortAscending;
   final int page;
@@ -28,8 +28,8 @@ class TaskQuery {
     String? search,
     String? status,
     String? priority,
-    int? createdById,
-    int? assignedToId,
+    String? createdById,
+    String? assignedToId,
     bool clearStatus = false,
     bool clearPriority = false,
     bool clearCreatedBy = false,

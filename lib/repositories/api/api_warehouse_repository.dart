@@ -2,38 +2,38 @@ import 'package:dio/dio.dart';
 
 import '../../core/api_exceptions.dart';
 import '../../models/warehouse.dart';
-import '../../state/page_result.dart';
-import '../../state/warehouse_query.dart';
 import '../warehouse_repository.dart';
+import '../../state/warehouse_query.dart';
+import '../../state/page_result.dart';
 
 class ApiWarehouseRepository implements WarehouseRepository {
   final Dio _dio;
   ApiWarehouseRepository(this._dio);
 
+  static const _path = '/api/collections/warehouses/records';
+
   @override
   Future<List<Warehouse>> findAll({bool includeDeleted = false}) {
     return guard(() async {
       final response = await _dio.get<Map<String, dynamic>>(
-        '/warehouses',
+        _path,
         queryParameters: {
-          if (includeDeleted) 'includeDeleted': true,
-          'size': 100,
+          'perPage': 200,
+          if (!includeDeleted) 'filter': '(deleted = false)',
         },
       );
-      final data = response.data!;
-      return (data['items'] as List? ?? [])
-          .whereType<Map<String, dynamic>>()
+      return (response.data!['items'] as List)
+          .cast<Map<String, dynamic>>()
           .map(Warehouse.fromJson)
           .toList();
     });
   }
 
   @override
-  Future<Warehouse?> findById(int id) {
+  Future<Warehouse?> findById(String id) {
     return guard(() async {
       try {
-        final response =
-            await _dio.get<Map<String, dynamic>>('/warehouses/$id');
+        final response = await _dio.get<Map<String, dynamic>>('$_path/$id');
         return Warehouse.fromJson(response.data!);
       } on DioException catch (e) {
         if (e.response?.statusCode == 404) return null;
@@ -48,28 +48,37 @@ class ApiWarehouseRepository implements WarehouseRepository {
     CancelToken? cancelToken,
   }) {
     return guard(() async {
+      final filters = <String>[];
+      if (!query.includeDeleted) filters.add('(deleted = false)');
+      if (query.type != null) filters.add('(type = "${query.type}")');
+      if (query.managerId != null) {
+        filters.add('(manager = "${query.managerId}")');
+      }
+
+      final search = query.search.trim();
+      if (search.isNotEmpty) {
+        filters.add('(name ~ "${search}" || address ~ "${search}")');
+      }
+
       final response = await _dio.get<Map<String, dynamic>>(
-        '/warehouses',
+        _path,
         cancelToken: cancelToken,
         queryParameters: {
-          if (query.search.trim().isNotEmpty) 'search': query.search.trim(),
-          if (query.type != null) 'type': query.type,
-          if (query.managerId != null) 'managerId': query.managerId,
-          'sort': '${query.sortField},${query.sortAscending ? 'asc' : 'desc'}',
+          if (filters.isNotEmpty) 'filter': filters.join(' && '),
+          'sort': '${query.sortAscending ? '' : '-'}${query.sortField}',
           'page': query.page,
-          'size': query.size,
-          if (query.includeDeleted) 'includeDeleted': true,
+          'perPage': query.size,
         },
       );
       final data = response.data!;
       return PageResult(
-        items: (data['items'] as List? ?? [])
-            .whereType<Map<String, dynamic>>()
+        items: (data['items'] as List)
+            .cast<Map<String, dynamic>>()
             .map(Warehouse.fromJson)
             .toList(),
         page: data['page'] as int? ?? 1,
-        size: data['size'] as int? ?? query.size,
-        total: data['total'] as int? ?? 0,
+        size: data['perPage'] as int? ?? query.size,
+        total: data['totalItems'] as int? ?? 0,
       );
     });
   }
@@ -78,8 +87,8 @@ class ApiWarehouseRepository implements WarehouseRepository {
   Future<Warehouse> create(Warehouse item) {
     return guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(
-        '/warehouses',
-        data: _toApiJson(item),
+        _path,
+        data: item.toJson(),
       );
       return Warehouse.fromJson(response.data!);
     });
@@ -88,57 +97,42 @@ class ApiWarehouseRepository implements WarehouseRepository {
   @override
   Future<Warehouse> update(Warehouse item) {
     return guard(() async {
-      final response = await _dio.put<Map<String, dynamic>>(
-        '/warehouses/${item.id}',
-        data: _toApiJson(item),
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '$_path/${item.id}',
+        data: item.toJson(),
       );
       return Warehouse.fromJson(response.data!);
     });
   }
 
   @override
-  Future<void> softDelete(int id) {
+  Future<void> softDelete(String id) {
     return guard(() async {
-      await _dio.delete<void>('/warehouses/$id');
+      await _dio.patch<void>('$_path/$id', data: {'deleted': true});
     });
   }
 
   @override
-  Future<void> hardDelete(int id) {
+  Future<void> hardDelete(String id) {
     return guard(() async {
-      await _dio.delete<void>(
-        '/warehouses/$id',
-        queryParameters: {'hard': true},
-      );
+      await _dio.delete<void>('$_path/$id');
     });
   }
 
   @override
-  Future<void> restore(int id) {
+  Future<void> restore(String id) {
     return guard(() async {
-      await _dio.post<void>('/warehouses/$id/restore');
+      await _dio.patch<void>('$_path/$id', data: {'deleted': false});
     });
   }
 
   @override
-  Future<int> deleteMany(List<int> ids) {
+  Future<int> deleteMany(List<String> ids) {
     return guard(() async {
-      final response = await _dio.post<Map<String, dynamic>>(
-        '/warehouses/bulk-delete',
-        data: {'ids': ids},
-      );
-      return response.data!['deleted'] as int? ?? 0;
+      for (final id in ids) {
+        await _dio.patch<void>('$_path/$id', data: {'deleted': true});
+      }
+      return ids.length;
     });
   }
-
-  Map<String, dynamic> _toApiJson(Warehouse item) => {
-    'name': item.name,
-    'address': item.address,
-    'type': item.type.toJson(),
-    'capacity': item.capacity,
-    'currentLoad': item.currentLoad,
-    'managerId': item.managerId,
-    'cargoIds': item.cargoIds,
-    'routeIds': item.routeIds,
-  };
 }

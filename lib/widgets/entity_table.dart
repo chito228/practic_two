@@ -17,9 +17,9 @@ class TableColumnSpec<T> {
 class EntityTable<T> extends StatelessWidget {
   final List<TableColumnSpec<T>> columns;
   final List<T> items;
-  final int Function(T item) idOf;
-  final Set<int> selected;
-  final ValueChanged<int>? onToggleSelect;
+  final String Function(T item) idOf;             // было int
+  final Set<String> selected;                     // было Set<int>
+  final ValueChanged<String>? onToggleSelect;     // было ValueChanged<int>
   final String? sortField;
   final bool sortAscending;
   final void Function(String field)? onSort;

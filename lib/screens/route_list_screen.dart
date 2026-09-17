@@ -2,24 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 
-import '../core/api_exceptions.dart';
 import '../models/role.dart';
 import '../models/vehicle.dart';
+import '../models/route.dart' as model;
 import '../state/auth_notifier.dart';
 import '../state/route_list_notifier.dart';
 import '../state/route_query.dart';
+import '../state/load_status.dart';
 import '../repositories/route_repository.dart';
 import '../repositories/vehicle_repository.dart';
-import '../repositories/order_repository.dart';
-import '../models/route.dart' as model;
 import '../widgets/entity_table.dart';
 import '../widgets/responsive_list.dart';
 import '../widgets/error_view.dart';
 import '../widgets/empty_view.dart';
 import '../widgets/main_scaffold.dart';
 import '../widgets/pagination_controls.dart';
+import '../widgets/cannot_delete_dialog.dart';
 import '../utils/debounce.dart';
-import '../state/load_status.dart';
+import '../utils/entity_dependencies.dart';
 
 class RouteListScreen extends StatefulWidget {
   const RouteListScreen({super.key});
@@ -85,14 +85,14 @@ class _RouteListScreenState extends State<RouteListScreen> {
               ),
             ),
           ),
-        if (notifier.hasSelection && auth.uiHasExactly(Role.logist))
+        if (notifier.hasSelection && auth.uiCanSoftDelete)
           IconButton(
             icon: const Icon(Icons.delete_outline),
             tooltip: 'Удалить выбранные',
             onPressed: () => _confirmDelete(context, notifier),
           ),
       ],
-      floatingActionButton: auth.uiHasExactly(Role.logist)
+      floatingActionButton: auth.uiCanEditBusiness
           ? FloatingActionButton(
               onPressed: () => context.go('/routes/create'),
               tooltip: 'Создать маршрут',
@@ -150,7 +150,10 @@ class _RouteListScreenState extends State<RouteListScreen> {
                     ),
                     items: const [
                       DropdownMenuItem(value: null, child: Text('Все')),
-                      DropdownMenuItem(value: 'active', child: Text('Активный')),
+                      DropdownMenuItem(
+                        value: 'active',
+                        child: Text('Активный'),
+                      ),
                       DropdownMenuItem(
                         value: 'completed',
                         child: Text('Завершён'),
@@ -173,19 +176,19 @@ class _RouteListScreenState extends State<RouteListScreen> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: DropdownButtonFormField<int>(
+                  child: DropdownButtonFormField<String>(
                     value: notifier.query.vehicleId,
                     decoration: const InputDecoration(
                       labelText: 'Транспорт',
                       border: OutlineInputBorder(),
                     ),
                     items: [
-                      const DropdownMenuItem<int>(
+                      const DropdownMenuItem<String>(
                         value: null,
                         child: Text('Все'),
                       ),
                       ..._vehicles.map(
-                        (v) => DropdownMenuItem<int>(
+                        (v) => DropdownMenuItem<String>(
                           value: v.id,
                           child: Text(v.plateNumber),
                         ),
@@ -225,7 +228,9 @@ class _RouteListScreenState extends State<RouteListScreen> {
                     ),
                   if (notifier.query.status != null)
                     ActionChip(
-                      label: Text('Статус: ${_statusText(notifier.query.status)}'),
+                      label: Text(
+                        'Статус: ${_statusText(notifier.query.status)}',
+                      ),
                       onPressed: () {
                         notifier.applyQuery(
                           notifier.query.copyWith(
@@ -237,7 +242,9 @@ class _RouteListScreenState extends State<RouteListScreen> {
                     ),
                   if (notifier.query.vehicleId != null)
                     ActionChip(
-                      label: Text('Транспорт ID: ${notifier.query.vehicleId}'),
+                      label: Text(
+                        'Транспорт: ${notifier.query.vehicleId}',
+                      ),
                       onPressed: () {
                         notifier.applyQuery(
                           notifier.query.copyWith(
@@ -314,7 +321,11 @@ class _RouteListScreenState extends State<RouteListScreen> {
           cardBuilder: (route) => Card(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: ListTile(
-              title: Text(route.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+              title: Text(
+                route.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               subtitle: Text(
                 '${route.origin} → ${route.destination}',
                 maxLines: 1,
@@ -328,7 +339,7 @@ class _RouteListScreenState extends State<RouteListScreen> {
             items: items,
             idOf: (r) => r.id,
             selected: notifier.selected,
-            onToggleSelect: auth.uiHasExactly(Role.logist)
+            onToggleSelect: auth.uiCanSoftDelete
                 ? notifier.toggleSelection
                 : null,
             sortField: notifier.query.sortField,
@@ -373,28 +384,31 @@ class _RouteListScreenState extends State<RouteListScreen> {
                 onPressed: () => context.go('/routes/${r.id}'),
                 child: const Text('Показать', style: TextStyle(fontSize: 12)),
               ),
-              if (auth.uiHasExactly(Role.logist) && !r.isDeleted)
+              if (auth.uiCanEditBusiness && !r.isDeleted)
                 TextButton(
                   onPressed: () => context.go('/routes/${r.id}/edit'),
                   child: const Text('Ред.', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHasExactly(Role.logist) && !r.isDeleted)
+              if (auth.uiCanSoftDelete && !r.isDeleted)
                 TextButton(
                   onPressed: () => _softDelete(context, r.id),
                   style: TextButton.styleFrom(foregroundColor: Colors.orange),
                   child: const Text('Скрыть', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHasExactly(Role.admin) && !r.isDeleted)
+              if (auth.uiCanHardDelete && !r.isDeleted)
                 TextButton(
-                  onPressed: () => _hardDelete(context, r.id),
+                  onPressed: () => _hardDelete(context, r),
                   style: TextButton.styleFrom(foregroundColor: Colors.red),
                   child: const Text('Удалить', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHasExactly(Role.admin) && r.isDeleted)
+              if (auth.uiCanHardDelete && r.isDeleted)
                 TextButton(
                   onPressed: () => _restore(context, r.id),
                   style: TextButton.styleFrom(foregroundColor: Colors.green),
-                  child: const Text('Восстановить', style: TextStyle(fontSize: 12)),
+                  child: const Text(
+                    'Восстановить',
+                    style: TextStyle(fontSize: 12),
+                  ),
                 ),
             ],
           ),
@@ -402,12 +416,11 @@ class _RouteListScreenState extends State<RouteListScreen> {
     }
   }
 
-  Future<void> _softDelete(BuildContext context, int id) async {
+  Future<void> _softDelete(BuildContext context, String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Скрыть маршрут?'),
-        content: const Text('Маршрут будет скрыт.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -422,42 +435,22 @@ class _RouteListScreenState extends State<RouteListScreen> {
     );
     if (confirmed != true) return;
     if (!context.mounted) return;
-
-    try {
-      final repo = Provider.of<RouteRepository>(context, listen: false);
-      await repo.softDelete(id);
-    } on ApiException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-      }
-      return;
-    }
-
+    final repo = Provider.of<RouteRepository>(context, listen: false);
+    await repo.softDelete(id);
     if (!context.mounted) return;
     final notifier = Provider.of<RouteListNotifier>(context, listen: false);
     await notifier.load();
   }
 
-  Future<void> _hardDelete(BuildContext context, int id) async {
-    final orderRepo = Provider.of<OrderRepository>(context, listen: false);
-    final all = await orderRepo.findAll(includeDeleted: true);
-    final related = all.where((o) => o.routeIds.contains(id) && !o.isDeleted).toList();
-    if (!context.mounted) return;
+  Future<void> _hardDelete(BuildContext context, model.Route route) async {
+    final blockers = await EntityDependencies.forRoute(context, route.id);
 
-    if (related.isNotEmpty) {
-      await showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Невозможно удалить маршрут'),
-          content: Text('Используется в ${related.length} заказах.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
+    if (blockers.isNotEmpty) {
+      if (!context.mounted) return;
+      await showCannotDeleteDialog(
+        context,
+        entityName: route.name,
+        blockers: blockers,
       );
       return;
     }
@@ -474,71 +467,32 @@ class _RouteListScreenState extends State<RouteListScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Удалить навсегда',
-              style: TextStyle(color: Colors.red),
-            ),
+            child: const Text('Удалить'),
           ),
         ],
       ),
     );
     if (confirmed != true) return;
     if (!context.mounted) return;
-
-    try {
-      final repo = Provider.of<RouteRepository>(context, listen: false);
-      await repo.hardDelete(id);
-    } on ApiException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-      }
-      return;
-    }
-
+    final repo = Provider.of<RouteRepository>(context, listen: false);
+    await repo.hardDelete(route.id);
     if (!context.mounted) return;
     final notifier = Provider.of<RouteListNotifier>(context, listen: false);
     await notifier.load();
   }
 
-  Future<void> _restore(BuildContext context, int id) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Восстановить маршрут?'),
-        content: const Text('Маршрут снова появится в списке.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Восстановить'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    if (!context.mounted) return;
-
-    try {
-      final repo = Provider.of<RouteRepository>(context, listen: false);
-      await repo.restore(id);
-    } on ApiException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-      }
-      return;
-    }
-
+  Future<void> _restore(BuildContext context, String id) async {
+    final repo = Provider.of<RouteRepository>(context, listen: false);
+    await repo.restore(id);
     if (!context.mounted) return;
     final notifier = Provider.of<RouteListNotifier>(context, listen: false);
     await notifier.load();
   }
 
-  Future<void> _confirmDelete(BuildContext context, RouteListNotifier n) async {
+  Future<void> _confirmDelete(
+    BuildContext context,
+    RouteListNotifier n,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(

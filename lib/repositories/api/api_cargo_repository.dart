@@ -2,37 +2,38 @@ import 'package:dio/dio.dart';
 
 import '../../core/api_exceptions.dart';
 import '../../models/cargo.dart';
+import '../cargo_repository.dart';
 import '../../state/cargo_query.dart';
 import '../../state/page_result.dart';
-import '../cargo_repository.dart';
 
 class ApiCargoRepository implements CargoRepository {
   final Dio _dio;
   ApiCargoRepository(this._dio);
 
+  static const _path = '/api/collections/cargo/records';
+
   @override
   Future<List<Cargo>> findAll({bool includeDeleted = false}) {
     return guard(() async {
       final response = await _dio.get<Map<String, dynamic>>(
-        '/cargo',
+        _path,
         queryParameters: {
-          if (includeDeleted) 'includeDeleted': true,
-          'size': 100,
+          'perPage': 200,
+          if (!includeDeleted) 'filter': '(deleted = false)',
         },
       );
-      final data = response.data!;
-      return (data['items'] as List? ?? [])
-          .whereType<Map<String, dynamic>>()
+      return (response.data!['items'] as List)
+          .cast<Map<String, dynamic>>()
           .map(Cargo.fromJson)
           .toList();
     });
   }
 
   @override
-  Future<Cargo?> findById(int id) {
+  Future<Cargo?> findById(String id) {
     return guard(() async {
       try {
-        final response = await _dio.get<Map<String, dynamic>>('/cargo/$id');
+        final response = await _dio.get<Map<String, dynamic>>('$_path/$id');
         return Cargo.fromJson(response.data!);
       } on DioException catch (e) {
         if (e.response?.statusCode == 404) return null;
@@ -47,26 +48,33 @@ class ApiCargoRepository implements CargoRepository {
     CancelToken? cancelToken,
   }) {
     return guard(() async {
+      final filters = <String>[];
+      if (!query.includeDeleted) filters.add('(deleted = false)');
+
+      final search = query.search.trim();
+      if (search.isNotEmpty) {
+        filters.add('(name ~ "${search}" || description ~ "${search}")');
+      }
+
       final response = await _dio.get<Map<String, dynamic>>(
-        '/cargo',
+        _path,
         cancelToken: cancelToken,
         queryParameters: {
-          if (query.search.trim().isNotEmpty) 'search': query.search.trim(),
-          'sort': '${query.sortField},${query.sortAscending ? 'asc' : 'desc'}',
+          if (filters.isNotEmpty) 'filter': filters.join(' && '),
+          'sort': '${query.sortAscending ? '' : '-'}${query.sortField}',
           'page': query.page,
-          'size': query.size,
-          if (query.includeDeleted) 'includeDeleted': true,
+          'perPage': query.size,
         },
       );
       final data = response.data!;
       return PageResult(
-        items: (data['items'] as List? ?? [])
-            .whereType<Map<String, dynamic>>()
+        items: (data['items'] as List)
+            .cast<Map<String, dynamic>>()
             .map(Cargo.fromJson)
             .toList(),
         page: data['page'] as int? ?? 1,
-        size: data['size'] as int? ?? query.size,
-        total: data['total'] as int? ?? 0,
+        size: data['perPage'] as int? ?? query.size,
+        total: data['totalItems'] as int? ?? 0,
       );
     });
   }
@@ -75,8 +83,8 @@ class ApiCargoRepository implements CargoRepository {
   Future<Cargo> create(Cargo item) {
     return guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(
-        '/cargo',
-        data: _toApiJson(item),
+        _path,
+        data: item.toJson(),
       );
       return Cargo.fromJson(response.data!);
     });
@@ -85,50 +93,42 @@ class ApiCargoRepository implements CargoRepository {
   @override
   Future<Cargo> update(Cargo item) {
     return guard(() async {
-      final response = await _dio.put<Map<String, dynamic>>(
-        '/cargo/${item.id}',
-        data: _toApiJson(item),
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '$_path/${item.id}',
+        data: item.toJson(),
       );
       return Cargo.fromJson(response.data!);
     });
   }
 
   @override
-  Future<void> softDelete(int id) {
+  Future<void> softDelete(String id) {
     return guard(() async {
-      await _dio.delete<void>('/cargo/$id');
+      await _dio.patch<void>('$_path/$id', data: {'deleted': true});
     });
   }
 
   @override
-  Future<void> hardDelete(int id) {
+  Future<void> hardDelete(String id) {
     return guard(() async {
-      await _dio.delete<void>('/cargo/$id', queryParameters: {'hard': true});
+      await _dio.delete<void>('$_path/$id');
     });
   }
 
   @override
-  Future<void> restore(int id) {
+  Future<void> restore(String id) {
     return guard(() async {
-      await _dio.post<void>('/cargo/$id/restore');
+      await _dio.patch<void>('$_path/$id', data: {'deleted': false});
     });
   }
 
   @override
-  Future<int> deleteMany(List<int> ids) {
+  Future<int> deleteMany(List<String> ids) {
     return guard(() async {
-      final response = await _dio.post<Map<String, dynamic>>(
-        '/cargo/bulk-delete',
-        data: {'ids': ids},
-      );
-      return response.data!['deleted'] as int? ?? 0;
+      for (final id in ids) {
+        await _dio.patch<void>('$_path/$id', data: {'deleted': true});
+      }
+      return ids.length;
     });
   }
-
-  Map<String, dynamic> _toApiJson(Cargo item) => {
-    'name': item.name,
-    'description': item.description,
-    'weightPerUnit': item.weightPerUnit,
-    'volumePerUnit': item.volumePerUnit,
-  };
 }

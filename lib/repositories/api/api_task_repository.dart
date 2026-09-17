@@ -2,37 +2,38 @@ import 'package:dio/dio.dart';
 
 import '../../core/api_exceptions.dart';
 import '../../models/task.dart';
-import '../../state/page_result.dart';
-import '../../state/task_query.dart';
 import '../task_repository.dart';
+import '../../state/task_query.dart';
+import '../../state/page_result.dart';
 
 class ApiTaskRepository implements TaskRepository {
   final Dio _dio;
   ApiTaskRepository(this._dio);
 
+  static const _path = '/api/collections/tasks/records';
+
   @override
   Future<List<Task>> findAll({bool includeDeleted = false}) {
     return guard(() async {
       final response = await _dio.get<Map<String, dynamic>>(
-        '/tasks',
+        _path,
         queryParameters: {
-          if (includeDeleted) 'includeDeleted': true,
-          'size': 100,
+          'perPage': 200,
+          if (!includeDeleted) 'filter': '(deleted = false)',
         },
       );
-      final data = response.data!;
-      return (data['items'] as List? ?? [])
-          .whereType<Map<String, dynamic>>()
+      return (response.data!['items'] as List)
+          .cast<Map<String, dynamic>>()
           .map(Task.fromJson)
           .toList();
     });
   }
 
   @override
-  Future<Task?> findById(int id) {
+  Future<Task?> findById(String id) {
     return guard(() async {
       try {
-        final response = await _dio.get<Map<String, dynamic>>('/tasks/$id');
+        final response = await _dio.get<Map<String, dynamic>>('$_path/$id');
         return Task.fromJson(response.data!);
       } on DioException catch (e) {
         if (e.response?.statusCode == 404) return null;
@@ -42,30 +43,34 @@ class ApiTaskRepository implements TaskRepository {
   }
 
   @override
-  Future<List<Task>> findByCreatedBy(int userId) {
+  Future<List<Task>> findByCreatedBy(String userId) {
     return guard(() async {
       final response = await _dio.get<Map<String, dynamic>>(
-        '/tasks',
-        queryParameters: {'createdById': userId, 'size': 100},
+        _path,
+        queryParameters: {
+          'filter': '(createdBy = "$userId") && (deleted = false)',
+          'perPage': 200,
+        },
       );
-      final data = response.data!;
-      return (data['items'] as List? ?? [])
-          .whereType<Map<String, dynamic>>()
+      return (response.data!['items'] as List)
+          .cast<Map<String, dynamic>>()
           .map(Task.fromJson)
           .toList();
     });
   }
 
   @override
-  Future<List<Task>> findByAssignedTo(int userId) {
+  Future<List<Task>> findByAssignedTo(String userId) {
     return guard(() async {
       final response = await _dio.get<Map<String, dynamic>>(
-        '/tasks',
-        queryParameters: {'assignedToId': userId, 'size': 100},
+        _path,
+        queryParameters: {
+          'filter': '(assignedTo = "$userId") && (deleted = false)',
+          'perPage': 200,
+        },
       );
-      final data = response.data!;
-      return (data['items'] as List? ?? [])
-          .whereType<Map<String, dynamic>>()
+      return (response.data!['items'] as List)
+          .cast<Map<String, dynamic>>()
           .map(Task.fromJson)
           .toList();
     });
@@ -77,30 +82,43 @@ class ApiTaskRepository implements TaskRepository {
     CancelToken? cancelToken,
   }) {
     return guard(() async {
+      final filters = <String>[];
+      if (!query.includeDeleted) filters.add('(deleted = false)');
+      if (query.status != null) filters.add('(status = "${query.status}")');
+      if (query.priority != null) {
+        filters.add('(priority = "${query.priority}")');
+      }
+      if (query.createdById != null) {
+        filters.add('(createdBy = "${query.createdById}")');
+      }
+      if (query.assignedToId != null) {
+        filters.add('(assignedTo = "${query.assignedToId}")');
+      }
+
+      final search = query.search.trim();
+      if (search.isNotEmpty) {
+        filters.add('(title ~ "${search}" || description ~ "${search}")');
+      }
+
       final response = await _dio.get<Map<String, dynamic>>(
-        '/tasks',
+        _path,
         cancelToken: cancelToken,
         queryParameters: {
-          if (query.search.trim().isNotEmpty) 'search': query.search.trim(),
-          if (query.status != null) 'status': query.status,
-          if (query.priority != null) 'priority': query.priority,
-          if (query.createdById != null) 'createdById': query.createdById,
-          if (query.assignedToId != null) 'assignedToId': query.assignedToId,
-          'sort': '${query.sortField},${query.sortAscending ? 'asc' : 'desc'}',
+          if (filters.isNotEmpty) 'filter': filters.join(' && '),
+          'sort': '${query.sortAscending ? '' : '-'}${query.sortField}',
           'page': query.page,
-          'size': query.size,
-          if (query.includeDeleted) 'includeDeleted': true,
+          'perPage': query.size,
         },
       );
       final data = response.data!;
       return PageResult(
-        items: (data['items'] as List? ?? [])
-            .whereType<Map<String, dynamic>>()
+        items: (data['items'] as List)
+            .cast<Map<String, dynamic>>()
             .map(Task.fromJson)
             .toList(),
         page: data['page'] as int? ?? 1,
-        size: data['size'] as int? ?? query.size,
-        total: data['total'] as int? ?? 0,
+        size: data['perPage'] as int? ?? query.size,
+        total: data['totalItems'] as int? ?? 0,
       );
     });
   }
@@ -109,8 +127,8 @@ class ApiTaskRepository implements TaskRepository {
   Future<Task> create(Task item) {
     return guard(() async {
       final response = await _dio.post<Map<String, dynamic>>(
-        '/tasks',
-        data: _toApiJson(item),
+        _path,
+        data: item.toJson(),
       );
       return Task.fromJson(response.data!);
     });
@@ -119,60 +137,42 @@ class ApiTaskRepository implements TaskRepository {
   @override
   Future<Task> update(Task item) {
     return guard(() async {
-      final response = await _dio.put<Map<String, dynamic>>(
-        '/tasks/${item.id}',
-        data: _toApiJson(item),
+      final response = await _dio.patch<Map<String, dynamic>>(
+        '$_path/${item.id}',
+        data: item.toJson(),
       );
       return Task.fromJson(response.data!);
     });
   }
 
   @override
-  Future<void> softDelete(int id) {
+  Future<void> softDelete(String id) {
     return guard(() async {
-      await _dio.delete<void>('/tasks/$id');
+      await _dio.patch<void>('$_path/$id', data: {'deleted': true});
     });
   }
 
   @override
-  Future<void> hardDelete(int id) {
+  Future<void> hardDelete(String id) {
     return guard(() async {
-      await _dio.delete<void>(
-        '/tasks/$id',
-        queryParameters: {'hard': true},
-      );
+      await _dio.delete<void>('$_path/$id');
     });
   }
 
   @override
-  Future<void> restore(int id) {
+  Future<void> restore(String id) {
     return guard(() async {
-      await _dio.post<void>('/tasks/$id/restore');
+      await _dio.patch<void>('$_path/$id', data: {'deleted': false});
     });
   }
 
   @override
-  Future<int> deleteMany(List<int> ids) {
+  Future<int> deleteMany(List<String> ids) {
     return guard(() async {
-      final response = await _dio.post<Map<String, dynamic>>(
-        '/tasks/bulk-delete',
-        data: {'ids': ids},
-      );
-      return response.data!['deleted'] as int? ?? 0;
+      for (final id in ids) {
+        await _dio.patch<void>('$_path/$id', data: {'deleted': true});
+      }
+      return ids.length;
     });
   }
-
-  Map<String, dynamic> _toApiJson(Task item) => {
-    'title': item.title,
-    'description': item.description,
-    'priority': item.priority.toJson(),
-    'status': item.status.toJson(),
-    'createdById': item.createdById,
-    'assignedToId': item.assignedToId,
-    'orderId': item.orderId,
-    'routeId': item.routeId,
-    'createdAt': item.createdAt.toIso8601String(),
-    'dueDate': item.dueDate?.toIso8601String(),
-    'resolution': item.resolution,
-  };
 }

@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 
-import '../core/api_exceptions.dart';
 import '../models/role.dart';
 import '../models/warehouse.dart';
 import '../models/app_user.dart';
 import '../state/auth_notifier.dart';
 import '../state/warehouse_list_notifier.dart';
 import '../state/warehouse_query.dart';
+import '../state/load_status.dart';
 import '../repositories/warehouse_repository.dart';
 import '../repositories/user_repository.dart';
 import '../widgets/entity_table.dart';
@@ -17,8 +17,9 @@ import '../widgets/error_view.dart';
 import '../widgets/empty_view.dart';
 import '../widgets/main_scaffold.dart';
 import '../widgets/pagination_controls.dart';
+import '../widgets/cannot_delete_dialog.dart';
 import '../utils/debounce.dart';
-import '../state/load_status.dart';
+import '../utils/entity_dependencies.dart';
 
 class WarehouseListScreen extends StatefulWidget {
   const WarehouseListScreen({super.key});
@@ -43,9 +44,7 @@ class _WarehouseListScreenState extends State<WarehouseListScreen> {
       final users = await repo.findAll();
       if (!mounted) return;
       setState(() => _users = users);
-    } catch (_) {
-      // Игнорируем — фильтр по менеджеру опциональный.
-    }
+    } catch (_) {}
   }
 
   @override
@@ -67,8 +66,8 @@ class _WarehouseListScreenState extends State<WarehouseListScreen> {
     }
   }
 
-  String _userName(int? id) {
-    if (id == null) return '—';
+  String _userName(String? id) {
+    if (id == null || id.isEmpty) return '—';
     try {
       return _users.firstWhere((u) => u.id == id).fullName;
     } catch (_) {
@@ -95,14 +94,14 @@ class _WarehouseListScreenState extends State<WarehouseListScreen> {
               ),
             ),
           ),
-        if (notifier.hasSelection && auth.uiHasExactly(Role.logist))
+        if (notifier.hasSelection && auth.uiCanSoftDelete)
           IconButton(
             icon: const Icon(Icons.delete_outline),
             tooltip: 'Удалить выбранные',
             onPressed: () => _confirmDelete(context, notifier),
           ),
       ],
-      floatingActionButton: auth.uiHasExactly(Role.logist)
+      floatingActionButton: auth.uiCanEditBusiness
           ? FloatingActionButton(
               onPressed: () => context.go('/warehouses/create'),
               tooltip: 'Создать склад',
@@ -186,19 +185,19 @@ class _WarehouseListScreenState extends State<WarehouseListScreen> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: DropdownButtonFormField<int>(
+                  child: DropdownButtonFormField<String>(
                     value: notifier.query.managerId,
                     decoration: const InputDecoration(
                       labelText: 'Ответственный',
                       border: OutlineInputBorder(),
                     ),
                     items: [
-                      const DropdownMenuItem<int>(
+                      const DropdownMenuItem<String>(
                         value: null,
                         child: Text('Все'),
                       ),
                       ..._users.map(
-                        (u) => DropdownMenuItem<int>(
+                        (u) => DropdownMenuItem<String>(
                           value: u.id,
                           child: Text(u.fullName),
                         ),
@@ -356,8 +355,6 @@ class _WarehouseListScreenState extends State<WarehouseListScreen> {
                           : Colors.green,
                   fontWeight: FontWeight.w600,
                 ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
               ),
               onTap: () => context.go('/warehouses/${w.id}'),
             ),
@@ -366,20 +363,21 @@ class _WarehouseListScreenState extends State<WarehouseListScreen> {
             items: items,
             idOf: (w) => w.id,
             selected: notifier.selected,
-            onToggleSelect: auth.uiHasExactly(Role.logist)
+            onToggleSelect: auth.uiCanSoftDelete
                 ? notifier.toggleSelection
                 : null,
             sortField: notifier.query.sortField,
             sortAscending: notifier.query.sortAscending,
             onSort: (field) {
-              final q = notifier.query.copyWith(
-                sortField: field,
-                sortAscending: field == notifier.query.sortField
-                    ? !notifier.query.sortAscending
-                    : true,
-                page: 1,
+              notifier.applyQuery(
+                notifier.query.copyWith(
+                  sortField: field,
+                  sortAscending: field == notifier.query.sortField
+                      ? !notifier.query.sortAscending
+                      : true,
+                  page: 1,
+                ),
               );
-              notifier.applyQuery(q);
             },
             columns: [
               TableColumnSpec<Warehouse>(
@@ -399,7 +397,6 @@ class _WarehouseListScreenState extends State<WarehouseListScreen> {
               ),
               TableColumnSpec<Warehouse>(
                 label: 'Заполненность',
-                sortField: 'currentLoad',
                 build: (w) => Text(
                   '${w.currentLoad.toStringAsFixed(0)} / '
                   '${w.capacity.toStringAsFixed(0)} м³ '
@@ -414,49 +411,29 @@ class _WarehouseListScreenState extends State<WarehouseListScreen> {
             actions: (w) => [
               TextButton(
                 onPressed: () => context.go('/warehouses/${w.id}'),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  minimumSize: Size.zero,
-                ),
                 child: const Text('Показать', style: TextStyle(fontSize: 12)),
               ),
-              if (auth.uiHasExactly(Role.logist) && !w.isDeleted)
+              if (auth.uiCanEditBusiness && !w.isDeleted)
                 TextButton(
                   onPressed: () => context.go('/warehouses/${w.id}/edit'),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    minimumSize: Size.zero,
-                  ),
                   child: const Text('Ред.', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHasExactly(Role.logist) && !w.isDeleted)
+              if (auth.uiCanSoftDelete && !w.isDeleted)
                 TextButton(
                   onPressed: () => _softDelete(context, w.id),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    minimumSize: Size.zero,
-                    foregroundColor: Colors.orange,
-                  ),
+                  style: TextButton.styleFrom(foregroundColor: Colors.orange),
                   child: const Text('Скрыть', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHasExactly(Role.admin) && !w.isDeleted)
+              if (auth.uiCanHardDelete && !w.isDeleted)
                 TextButton(
                   onPressed: () => _hardDelete(context, w),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    minimumSize: Size.zero,
-                    foregroundColor: Colors.red,
-                  ),
+                  style: TextButton.styleFrom(foregroundColor: Colors.red),
                   child: const Text('Удалить', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHasExactly(Role.admin) && w.isDeleted)
+              if (auth.uiCanHardDelete && w.isDeleted)
                 TextButton(
                   onPressed: () => _restore(context, w.id),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    minimumSize: Size.zero,
-                    foregroundColor: Colors.green,
-                  ),
+                  style: TextButton.styleFrom(foregroundColor: Colors.green),
                   child: const Text(
                     'Восстановить',
                     style: TextStyle(fontSize: 12),
@@ -468,14 +445,12 @@ class _WarehouseListScreenState extends State<WarehouseListScreen> {
     }
   }
 
-  Future<void> _softDelete(BuildContext context, int id) async {
-    final confirmed = await showDialog<bool>(
+  Future<void> _softDelete(BuildContext context, String id) async {
+    final c = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Скрыть склад?'),
-        content: const Text(
-          'Склад будет скрыт, но не удалён. Его можно будет восстановить.',
-        ),
+        content: const Text('Склад будет скрыт.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -488,89 +463,33 @@ class _WarehouseListScreenState extends State<WarehouseListScreen> {
         ],
       ),
     );
-    if (confirmed != true) return;
+    if (c != true) return;
     if (!context.mounted) return;
-
-    try {
-      final repository = Provider.of<WarehouseRepository>(
-        context,
-        listen: false,
-      );
-      await repository.softDelete(id);
-    } on ApiException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-      }
-      return;
-    }
-
+    final r = Provider.of<WarehouseRepository>(context, listen: false);
+    await r.softDelete(id);
     if (!context.mounted) return;
-    final notifier = Provider.of<WarehouseListNotifier>(
-      context,
-      listen: false,
-    );
-    await notifier.load();
+    final n = Provider.of<WarehouseListNotifier>(context, listen: false);
+    await n.load();
   }
 
   Future<void> _hardDelete(BuildContext context, Warehouse w) async {
-    // Проверка связей — на клиенте перед запросом.
-    if (w.cargoIds.isNotEmpty || w.routeIds.isNotEmpty) {
-      await showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text(
-            'Невозможно удалить склад',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Склад используется в других записях:',
-                style: TextStyle(fontSize: 14),
-              ),
-              const SizedBox(height: 8),
-              if (w.cargoIds.isNotEmpty)
-                Text(
-                  '• Грузов на складе: ${w.cargoIds.length}',
-                  style: const TextStyle(fontSize: 14),
-                ),
-              if (w.routeIds.isNotEmpty)
-                Text(
-                  '• Маршрутов через склад: ${w.routeIds.length}',
-                  style: const TextStyle(fontSize: 14),
-                ),
-              const SizedBox(height: 12),
-              const Text(
-                'Сначала удалите или переназначьте связанные записи.',
-                style: TextStyle(fontSize: 14, color: Colors.grey),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
+    final blockers = await EntityDependencies.forWarehouse(context, w.id);
+
+    if (blockers.isNotEmpty) {
+      if (!context.mounted) return;
+      await showCannotDeleteDialog(
+        context,
+        entityName: w.name,
+        blockers: blockers,
       );
       return;
     }
 
-    final confirmed = await showDialog<bool>(
+    final c = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text(
-          'Удалить склад навсегда?',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          'Это действие нельзя отменить!',
-          style: TextStyle(fontSize: 14),
-        ),
+        title: const Text('Удалить склад навсегда?'),
+        content: const Text('Это действие нельзя отменить!'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -578,93 +497,37 @@ class _WarehouseListScreenState extends State<WarehouseListScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Удалить навсегда',
-              style: TextStyle(color: Colors.red),
-            ),
+            child: const Text('Удалить', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
-    if (confirmed != true) return;
+    if (c != true) return;
     if (!context.mounted) return;
-
-    try {
-      final repository = Provider.of<WarehouseRepository>(
-        context,
-        listen: false,
-      );
-      await repository.hardDelete(w.id);
-    } on ApiException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-      }
-      return;
-    }
-
+    final r = Provider.of<WarehouseRepository>(context, listen: false);
+    await r.hardDelete(w.id);
     if (!context.mounted) return;
-    final listNotifier = Provider.of<WarehouseListNotifier>(
-      context,
-      listen: false,
-    );
-    await listNotifier.load();
+    final n = Provider.of<WarehouseListNotifier>(context, listen: false);
+    await n.load();
   }
 
-  Future<void> _restore(BuildContext context, int id) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Восстановить склад?'),
-        content: const Text('Склад снова появится в списке.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Восстановить'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
+  Future<void> _restore(BuildContext context, String id) async {
+    final r = Provider.of<WarehouseRepository>(context, listen: false);
+    await r.restore(id);
     if (!context.mounted) return;
-
-    try {
-      final repository = Provider.of<WarehouseRepository>(
-        context,
-        listen: false,
-      );
-      await repository.restore(id);
-    } on ApiException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-      }
-      return;
-    }
-
-    if (!context.mounted) return;
-    final notifier = Provider.of<WarehouseListNotifier>(
-      context,
-      listen: false,
-    );
-    await notifier.load();
+    final n = Provider.of<WarehouseListNotifier>(context, listen: false);
+    await n.load();
   }
 
   Future<void> _confirmDelete(
     BuildContext context,
-    WarehouseListNotifier notifier,
+    WarehouseListNotifier n,
   ) async {
-    final confirmed = await showDialog<bool>(
+    final c = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Подтверждение удаления'),
-        content: Text(
-          'Скрыть ${notifier.selected.length} складов?',
-        ),
+        title: const Text('Подтверждение'),
+        content: Text('Скрыть ${n.selected.length} складов?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -677,8 +540,6 @@ class _WarehouseListScreenState extends State<WarehouseListScreen> {
         ],
       ),
     );
-    if (confirmed == true) {
-      await notifier.deleteSelected();
-    }
+    if (c == true) await n.deleteSelected();
   }
 }

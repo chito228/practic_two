@@ -1,9 +1,9 @@
 class OrderQuery {
   final String search;
   final String? status;
-  final int? clientId;
-  final int? cargoId;
-  final int? routeId;
+  final String? clientId;      // было int?
+  final String? cargoId;       // было int?
+  final String? routeId;       // было int?
   final DateTime? dateFrom;
   final DateTime? dateTo;
   final String sortField;
@@ -30,9 +30,9 @@ class OrderQuery {
   OrderQuery copyWith({
     String? search,
     String? status,
-    int? clientId,
-    int? cargoId,
-    int? routeId,
+    String? clientId,
+    String? cargoId,
+    String? routeId,
     DateTime? dateFrom,
     DateTime? dateTo,
     String? sortField,

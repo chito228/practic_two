@@ -15,7 +15,7 @@ import '../widgets/generic_form.dart';
 import '../state/warehouse_list_notifier.dart';
 
 class WarehouseFormScreen extends StatefulWidget {
-  final int? id;
+  final String? id;
   const WarehouseFormScreen({super.key, this.id});
 
   bool get isEditing => id != null;
@@ -54,7 +54,7 @@ class _WarehouseFormScreenState extends State<WarehouseFormScreen> {
         if (w != null) _warehouse = w;
       } else {
         _warehouse = const Warehouse(
-          id: 0,
+          id: '',
           name: '',
           address: '',
           type: WarehouseType.dry,
@@ -80,7 +80,7 @@ class _WarehouseFormScreenState extends State<WarehouseFormScreen> {
         : WarehouseType.fromString(typeValue?.toString());
 
     final warehouse = Warehouse(
-      id: _warehouse?.id ?? 0,
+      id: _warehouse?.id ?? '',
       name: (values['name'] as String?) ?? '',
       address: (values['address'] as String?) ?? '',
       type: type,
@@ -88,9 +88,10 @@ class _WarehouseFormScreenState extends State<WarehouseFormScreen> {
           double.tryParse(values['capacity']?.toString() ?? '') ?? 0.0,
       currentLoad:
           double.tryParse(values['currentLoad']?.toString() ?? '') ?? 0.0,
-      managerId: values['managerId'] as int?,
-      cargoIds: (values['cargoIds'] as List<int>?) ?? [],
-      routeIds: (values['routeIds'] as List<int>?) ?? [],
+      managerId: values['managerId'] as String?,
+      cargoIds: (values['cargoIds'] as List<String>?) ?? const [],
+      routeIds: (values['routeIds'] as List<String>?) ?? const [],
+      isDeleted: _warehouse?.isDeleted ?? false,
     );
 
     if (widget.isEditing) {
@@ -128,8 +129,8 @@ class _WarehouseFormScreenState extends State<WarehouseFormScreen> {
         'capacity': _warehouse?.capacity.toString() ?? '0',
         'currentLoad': _warehouse?.currentLoad.toString() ?? '0',
         'managerId': _warehouse?.managerId,
-        'cargoIds': _warehouse?.cargoIds ?? <int>[],
-        'routeIds': _warehouse?.routeIds ?? <int>[],
+        'cargoIds': _warehouse?.cargoIds ?? <String>[],
+        'routeIds': _warehouse?.routeIds ?? <String>[],
       },
       optionsData: {'cargoIds': _cargos, 'routeIds': _routes},
       fields: [
@@ -173,7 +174,7 @@ class _WarehouseFormScreenState extends State<WarehouseFormScreen> {
           required: false,
           options: _managers
               .map(
-                (u) => DropdownMenuItem(
+                (u) => DropdownMenuItem<String>(
                   value: u.id,
                   child: Text('${u.fullName} (${u.role.label})'),
                 ),

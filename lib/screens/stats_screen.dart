@@ -6,6 +6,7 @@ import '../repositories/client_repository.dart';
 import '../repositories/order_repository.dart';
 import '../repositories/route_repository.dart';
 import '../repositories/vehicle_repository.dart';
+import '../widgets/main_scaffold.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -49,21 +50,26 @@ class _StatsScreenState extends State<StatsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return MainScaffold(
+      title: 'Статистика',
+      currentRoute: '/stats',
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
     if (_isLoading) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Статистика')),
-        body: const Center(child: CircularProgressIndicator()),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_error != null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Статистика')),
-        body: Center(
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(_error!),
+              Text(_error!, textAlign: TextAlign.center),
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () {
@@ -81,7 +87,6 @@ class _StatsScreenState extends State<StatsScreen> {
       );
     }
 
-    // Подсчёты.
     final totalOrders = _orders.length;
     final inTransit = _orders.where((o) => o.status == 'in_transit').length;
     final delivered = _orders.where((o) => o.status == 'delivered').length;
@@ -95,14 +100,14 @@ class _StatsScreenState extends State<StatsScreen> {
       (s, r) => s + (r.distance as num).toDouble(),
     );
 
-    final activeVehicles = _vehicles.where((v) => v.status == 'active').length;
-    final maintenanceVehicles = _vehicles
-        .where((v) => v.status == 'maintenance')
-        .length;
-    final repairVehicles = _vehicles.where((v) => v.status == 'repair').length;
+    final activeVehicles =
+        _vehicles.where((v) => v.status == 'active').length;
+    final maintenanceVehicles =
+        _vehicles.where((v) => v.status == 'maintenance').length;
+    final repairVehicles =
+        _vehicles.where((v) => v.status == 'repair').length;
 
-    // Топ клиентов.
-    final orderCountByClient = <int, int>{};
+    final orderCountByClient = <String, int>{};
     for (final o in _orders) {
       orderCountByClient[o.clientId] =
           (orderCountByClient[o.clientId] ?? 0) + 1;
@@ -111,49 +116,52 @@ class _StatsScreenState extends State<StatsScreen> {
       ..sort((a, b) => b.value.compareTo(a.value));
     final top5 = topClients.take(5).toList();
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Статистика')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _section('Заказы'),
-          _row('Всего заказов', totalOrders.toString()),
-          _row('В пути', inTransit.toString()),
-          _row('Доставлено', delivered.toString()),
-          _row('Отменено', cancelled.toString()),
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _section('Заказы'),
+        _row('Всего заказов', totalOrders.toString()),
+        _row('В пути', inTransit.toString()),
+        _row('Доставлено', delivered.toString()),
+        _row('Отменено', cancelled.toString()),
 
-          _section('Перевозки'),
-          _row('Общий вес', '${totalWeight.toStringAsFixed(1)} кг'),
-          _row('Общий объём', '${totalVolume.toStringAsFixed(1)} м³'),
-          _row('Общее расстояние', '${totalDistance.toStringAsFixed(0)} км'),
+        _section('Перевозки'),
+        _row('Общий вес', '${totalWeight.toStringAsFixed(1)} кг'),
+        _row('Общий объём', '${totalVolume.toStringAsFixed(1)} м³'),
+        _row(
+          'Общее расстояние',
+          '${totalDistance.toStringAsFixed(0)} км',
+        ),
 
-          _section('Транспорт'),
-          _row('Всего единиц', _vehicles.length.toString()),
-          _row('В работе', activeVehicles.toString()),
-          _row('На обслуживании', maintenanceVehicles.toString()),
-          _row('В ремонте', repairVehicles.toString()),
+        _section('Транспорт'),
+        _row('Всего единиц', _vehicles.length.toString()),
+        _row('В работе', activeVehicles.toString()),
+        _row('На обслуживании', maintenanceVehicles.toString()),
+        _row('В ремонте', repairVehicles.toString()),
 
-          _section('Топ-5 клиентов по заказам'),
-          if (top5.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('Нет данных', style: TextStyle(color: Colors.grey)),
-            )
-          else
-            ...top5.map((entry) {
-              final client = _clients.cast<dynamic>().firstWhere(
-                (c) => c.id == entry.key,
-                orElse: () => null,
-              );
-              final name = client?.companyName ?? 'Клиент #${entry.key}';
-              return _row(name, entry.value.toString());
-            }),
+        _section('Топ-5 клиентов по заказам'),
+        if (top5.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              'Нет данных',
+              style: TextStyle(color: Colors.grey),
+            ),
+          )
+        else
+          ...top5.map((entry) {
+            final client = _clients.cast<dynamic>().firstWhere(
+              (c) => c.id == entry.key,
+              orElse: () => null,
+            );
+            final name = client?.companyName ?? 'Клиент ${entry.key}';
+            return _row(name, entry.value.toString());
+          }),
 
-          _section('Справочники'),
-          _row('Клиентов', _clients.length.toString()),
-          _row('Маршрутов', _routes.length.toString()),
-        ],
-      ),
+        _section('Справочники'),
+        _row('Клиентов', _clients.length.toString()),
+        _row('Маршрутов', _routes.length.toString()),
+      ],
     );
   }
 
@@ -173,8 +181,6 @@ class _StatsScreenState extends State<StatsScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Фиксированная ширина заголовка — значения
-          // выстраиваются в одну колонку слева.
           SizedBox(
             width: 220,
             child: Text(label, style: const TextStyle(fontSize: 15)),
