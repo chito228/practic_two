@@ -2,15 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/api_exceptions.dart';
 import '../models/role.dart';
 import '../state/auth_notifier.dart';
 import '../state/cargo_list_notifier.dart';
+import '../state/cargo_query.dart';
 import '../models/cargo.dart';
 import '../widgets/entity_table.dart';
 import '../widgets/responsive_list.dart';
 import '../widgets/error_view.dart';
 import '../widgets/empty_view.dart';
 import '../widgets/main_scaffold.dart';
+import '../widgets/pagination_controls.dart';
 import '../utils/debounce.dart';
 import '../state/load_status.dart';
 import '../repositories/cargo_repository.dart';
@@ -25,7 +28,6 @@ class CargoListScreen extends StatefulWidget {
 
 class _CargoListScreenState extends State<CargoListScreen> {
   final Debouncer _debouncer = Debouncer();
-  String _searchQuery = '';
 
   @override
   void dispose() {
@@ -52,14 +54,14 @@ class _CargoListScreenState extends State<CargoListScreen> {
               ),
             ),
           ),
-        if (notifier.hasSelection && auth.uiHas(Role.admin))
+        if (notifier.hasSelection && auth.uiHasExactly(Role.logist))
           IconButton(
             icon: const Icon(Icons.delete_outline),
             tooltip: 'Удалить выбранные',
             onPressed: () => _confirmDelete(context, notifier),
           ),
       ],
-      floatingActionButton: auth.uiHas(Role.admin)
+      floatingActionButton: auth.uiHasExactly(Role.logist)
           ? FloatingActionButton(
               onPressed: () => context.go('/cargo/create'),
               tooltip: 'Создать груз',
@@ -69,22 +71,100 @@ class _CargoListScreenState extends State<CargoListScreen> {
       body: Column(
         children: [
           Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                const Text('Показать удалённые'),
+                Switch(
+                  value: notifier.query.includeDeleted,
+                  onChanged: (value) {
+                    notifier.applyQuery(
+                      notifier.query.copyWith(includeDeleted: value, page: 1),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          Padding(
             padding: const EdgeInsets.all(16.0),
             child: TextField(
               decoration: const InputDecoration(
-                labelText: 'Поиск по названию',
+                labelText: 'Поиск по названию или описанию',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.search),
               ),
               onChanged: (value) {
-                _searchQuery = value;
                 _debouncer.call(() {
-                  setState(() {});
+                  notifier.applyQuery(
+                    notifier.query.copyWith(search: value, page: 1),
+                  );
                 });
               },
             ),
           ),
+          if (notifier.query.hasFilters)
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 8.0,
+              ),
+              child: Wrap(
+                spacing: 8,
+                children: [
+                  if (notifier.query.search.isNotEmpty)
+                    ActionChip(
+                      label: Text('Поиск: ${notifier.query.search}'),
+                      onPressed: () {
+                        notifier.applyQuery(
+                          notifier.query.copyWith(search: '', page: 1),
+                        );
+                      },
+                    ),
+                  if (notifier.query.includeDeleted)
+                    ActionChip(
+                      label: const Text('Показаны удалённые'),
+                      onPressed: () {
+                        notifier.applyQuery(
+                          notifier.query.copyWith(
+                            includeDeleted: false,
+                            page: 1,
+                          ),
+                        );
+                      },
+                    ),
+                  ActionChip(
+                    label: const Text('Сбросить всё'),
+                    onPressed: () {
+                      notifier.applyQuery(const CargoQuery());
+                    },
+                  ),
+                ],
+              ),
+            ),
           Expanded(child: _buildContent(notifier, auth)),
+          if (notifier.status == LoadStatus.success &&
+              notifier.result.total > 0)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 80.0),
+              child: PaginationControls(
+                currentPage: notifier.query.page,
+                totalPages: notifier.result.totalPages,
+                totalItems: notifier.result.total,
+                pageSize: notifier.query.size,
+                onPageChanged: (page) {
+                  notifier.applyQuery(notifier.query.copyWith(page: page));
+                },
+                onSizeChanged: (size) {
+                  notifier.applyQuery(
+                    notifier.query.copyWith(size: size, page: 1),
+                  );
+                },
+              ),
+            ),
         ],
       ),
     );
@@ -103,26 +183,11 @@ class _CargoListScreenState extends State<CargoListScreen> {
         );
 
       case LoadStatus.success:
-        final filteredItems = _searchQuery.isEmpty
-            ? notifier.items
-            : notifier.items
-                  .where(
-                    (c) =>
-                        c.name.toLowerCase().contains(
-                          _searchQuery.toLowerCase(),
-                        ) ||
-                        (c.description?.toLowerCase().contains(
-                              _searchQuery.toLowerCase(),
-                            ) ??
-                            false),
-                  )
-                  .toList();
-
-        if (filteredItems.isEmpty) {
+        if (notifier.result.items.isEmpty) {
           return const EmptyView(message: 'Нет грузов');
         }
         return ResponsiveList<Cargo>(
-          items: filteredItems,
+          items: notifier.result.items,
           cardBuilder: (cargo) => Card(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: ListTile(
@@ -148,22 +213,35 @@ class _CargoListScreenState extends State<CargoListScreen> {
             items: items,
             idOf: (c) => c.id,
             selected: notifier.selected,
-            onToggleSelect: auth.uiHas(Role.admin)
+            onToggleSelect: auth.uiHasExactly(Role.logist)
                 ? notifier.toggleSelection
                 : null,
-            sortField: 'name',
-            sortAscending: true,
+            sortField: notifier.query.sortField,
+            sortAscending: notifier.query.sortAscending,
+            onSort: (field) {
+              final q = notifier.query.copyWith(
+                sortField: field,
+                sortAscending: field == notifier.query.sortField
+                    ? !notifier.query.sortAscending
+                    : true,
+                page: 1,
+              );
+              notifier.applyQuery(q);
+            },
             columns: [
               TableColumnSpec<Cargo>(
                 label: 'Название',
+                sortField: 'name',
                 build: (c) => Text(c.name),
               ),
               TableColumnSpec<Cargo>(
                 label: 'Вес (кг)',
+                sortField: 'weightPerUnit',
                 build: (c) => Text(c.weightPerUnit.toString()),
               ),
               TableColumnSpec<Cargo>(
                 label: 'Объём (м³)',
+                sortField: 'volumePerUnit',
                 build: (c) => Text(c.volumePerUnit.toString()),
               ),
               TableColumnSpec<Cargo>(
@@ -180,7 +258,7 @@ class _CargoListScreenState extends State<CargoListScreen> {
                 ),
                 child: const Text('Показать', style: TextStyle(fontSize: 12)),
               ),
-              if (auth.uiHas(Role.admin))
+              if (auth.uiHasExactly(Role.logist) && !c.isDeleted)
                 TextButton(
                   onPressed: () => context.go('/cargo/${c.id}/edit'),
                   style: TextButton.styleFrom(
@@ -189,7 +267,7 @@ class _CargoListScreenState extends State<CargoListScreen> {
                   ),
                   child: const Text('Ред.', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHas(Role.admin))
+              if (auth.uiHasExactly(Role.logist) && !c.isDeleted)
                 TextButton(
                   onPressed: () => _softDelete(context, c.id),
                   style: TextButton.styleFrom(
@@ -199,7 +277,7 @@ class _CargoListScreenState extends State<CargoListScreen> {
                   ),
                   child: const Text('Скрыть', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHas(Role.admin))
+              if (auth.uiHasExactly(Role.admin) && !c.isDeleted)
                 TextButton(
                   onPressed: () => _hardDelete(context, c.id),
                   style: TextButton.styleFrom(
@@ -208,6 +286,19 @@ class _CargoListScreenState extends State<CargoListScreen> {
                     foregroundColor: Colors.red,
                   ),
                   child: const Text('Удалить', style: TextStyle(fontSize: 12)),
+                ),
+              if (auth.uiHasExactly(Role.admin) && c.isDeleted)
+                TextButton(
+                  onPressed: () => _restore(context, c.id),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    minimumSize: Size.zero,
+                    foregroundColor: Colors.green,
+                  ),
+                  child: const Text(
+                    'Восстановить',
+                    style: TextStyle(fontSize: 12),
+                  ),
                 ),
             ],
           ),
@@ -235,68 +326,53 @@ class _CargoListScreenState extends State<CargoListScreen> {
         ],
       ),
     );
-    if (confirmed == true) {
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    try {
       final repository = Provider.of<CargoRepository>(context, listen: false);
       await repository.softDelete(id);
-      if (!context.mounted) return;
-      final notifier = Provider.of<CargoListNotifier>(context, listen: false);
-      await notifier.load();
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
+      }
+      return;
     }
+
+    if (!context.mounted) return;
+    final notifier = Provider.of<CargoListNotifier>(context, listen: false);
+    await notifier.load();
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
     final orderRepo = Provider.of<OrderRepository>(context, listen: false);
     final allOrders = await orderRepo.findAll(includeDeleted: true);
-    final relatedOrders = allOrders
+    final related = allOrders
         .where((o) => o.cargoIds.contains(id) && !o.isDeleted)
         .toList();
     if (!context.mounted) return;
 
-    if (relatedOrders.isNotEmpty) {
+    if (related.isNotEmpty) {
       await showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text(
-            'Невозможно удалить груз',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
+          title: const Text('Невозможно удалить груз'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Этот груз используется в заказах:',
-                style: TextStyle(fontSize: 14),
-              ),
+              const Text('Груз используется в заказах:'),
               const SizedBox(height: 8),
-              ...relatedOrders.map(
-                (order) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2.0),
-                  child: Text(
-                    '• Заказ #${order.orderNumber} (${order.cargoDescription})',
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Количество заказов: ${relatedOrders.length}',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Сначала удалите или переназначьте заказы, затем попробуйте снова.',
-                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ...related.map(
+                (o) => Text('• Заказ #${o.orderNumber}'),
               ),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('OK', style: TextStyle(fontSize: 14)),
+              child: const Text('OK'),
             ),
           ],
         ),
@@ -307,87 +383,8 @@ class _CargoListScreenState extends State<CargoListScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text(
-          'Удалить груз навсегда?',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          'Это действие нельзя отменить!',
-          style: TextStyle(fontSize: 14),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена', style: TextStyle(fontSize: 14)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Удалить навсегда',
-              style: TextStyle(fontSize: 14, color: Colors.red),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      final repository = Provider.of<CargoRepository>(context, listen: false);
-      await repository.hardDelete(id);
-      if (!context.mounted) return;
-      final notifier = Provider.of<CargoListNotifier>(context, listen: false);
-      await notifier.load();
-    }
-  }
-
-  Future<void> _confirmDelete(
-    BuildContext context,
-    CargoListNotifier notifier,
-  ) async {
-    final orderRepo = Provider.of<OrderRepository>(context, listen: false);
-    final allOrders = await orderRepo.findAll(includeDeleted: true);
-    final cargosWithOrders = <int>[];
-
-    for (final id in notifier.selected) {
-      final relatedOrders = allOrders.where(
-        (o) => o.cargoIds.contains(id) && !o.isDeleted,
-      );
-      if (relatedOrders.isNotEmpty) {
-        cargosWithOrders.add(id);
-      }
-    }
-    if (!context.mounted) return;
-
-    if (cargosWithOrders.isNotEmpty) {
-      await showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text(
-            'Невозможно удалить грузы',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          content: Text(
-            '${cargosWithOrders.length} груз(ов) используются в заказах.\n\n'
-            'Сначала удалите или переназначьте заказы, затем попробуйте снова.',
-            style: const TextStyle(fontSize: 14),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK', style: TextStyle(fontSize: 14)),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Подтверждение удаления'),
-        content: Text(
-          'Вы уверены, что хотите удалить ${notifier.selected.length} грузов?',
-        ),
+        title: const Text('Удалить груз навсегда?'),
+        content: const Text('Это действие нельзя отменить!'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -395,7 +392,87 @@ class _CargoListScreenState extends State<CargoListScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить'),
+            child: const Text(
+              'Удалить навсегда',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    try {
+      final repository = Provider.of<CargoRepository>(context, listen: false);
+      await repository.hardDelete(id);
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
+      }
+      return;
+    }
+
+    if (!context.mounted) return;
+    final notifier = Provider.of<CargoListNotifier>(context, listen: false);
+    await notifier.load();
+  }
+
+  Future<void> _restore(BuildContext context, int id) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Восстановить груз?'),
+        content: const Text('Груз снова появится в списке.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Восстановить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    try {
+      final repository = Provider.of<CargoRepository>(context, listen: false);
+      await repository.restore(id);
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
+      }
+      return;
+    }
+
+    if (!context.mounted) return;
+    final notifier = Provider.of<CargoListNotifier>(context, listen: false);
+    await notifier.load();
+  }
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    CargoListNotifier notifier,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Подтверждение удаления'),
+        content: Text('Скрыть ${notifier.selected.length} грузов?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Скрыть'),
           ),
         ],
       ),

@@ -6,6 +6,7 @@ class AppUser {
   final String fullName;
   final String email;
   final Role role;
+  final DateTime? deletedAt;
 
   const AppUser({
     required this.id,
@@ -13,7 +14,10 @@ class AppUser {
     required this.fullName,
     required this.email,
     required this.role,
+    this.deletedAt,
   });
+
+  bool get isDeleted => deletedAt != null;
 
   AppUser copyWith({
     int? id,
@@ -21,6 +25,8 @@ class AppUser {
     String? fullName,
     String? email,
     Role? role,
+    DateTime? deletedAt,
+    bool clearDeletedAt = false,
   }) {
     return AppUser(
       id: id ?? this.id,
@@ -28,6 +34,7 @@ class AppUser {
       fullName: fullName ?? this.fullName,
       email: email ?? this.email,
       role: role ?? this.role,
+      deletedAt: clearDeletedAt ? null : (deletedAt ?? this.deletedAt),
     );
   }
 
@@ -37,6 +44,9 @@ class AppUser {
     fullName: json['fullName'] as String? ?? '',
     email: json['email'] as String? ?? '',
     role: Role.fromString(json['role'] as String?),
+    deletedAt: json['deletedAt'] == null
+        ? null
+        : DateTime.parse(json['deletedAt'] as String),
   );
 
   Map<String, dynamic> toJson() => {
@@ -45,5 +55,6 @@ class AppUser {
     'fullName': fullName,
     'email': email,
     'role': role.toJson(),
+    'deletedAt': deletedAt?.toIso8601String(),
   };
 }

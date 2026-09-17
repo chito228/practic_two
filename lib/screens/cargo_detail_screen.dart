@@ -66,7 +66,7 @@ class CargoDetailScreen extends StatelessWidget {
                       ),
 
                       // Редактирование груза — только admin.
-                      if (auth.uiHas(Role.admin))
+                      if (auth.uiHasExactly(Role.admin))
                         ElevatedButton(
                           onPressed: () =>
                               context.go('/cargo/${cargo.id}/edit'),
@@ -75,18 +75,18 @@ class CargoDetailScreen extends StatelessWidget {
 
                       // Скрыть/удалить/восстановить — только admin.
                       if (!cargo.isDeleted) ...[
-                        if (auth.uiHas(Role.admin))
+                        if (auth.uiHasExactly(Role.admin))
                           ElevatedButton(
                             onPressed: () => _softDelete(context, cargo.id),
                             child: const Text('Скрыть'),
                           ),
-                        if (auth.uiHas(Role.admin))
+                        if (auth.uiHasExactly(Role.admin))
                           ElevatedButton(
                             onPressed: () => _hardDelete(context, cargo.id),
                             child: const Text('Удалить'),
                           ),
                       ] else ...[
-                        if (auth.uiHas(Role.admin))
+                        if (auth.uiHasExactly(Role.admin))
                           ElevatedButton(
                             onPressed: () => _restore(context, cargo.id),
                             child: const Text('Восстановить'),

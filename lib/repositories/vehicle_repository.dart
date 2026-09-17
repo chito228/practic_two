@@ -1,9 +1,16 @@
-import '../models/vehicle.dart';
+import 'package:dio/dio.dart';
 
-/// Интерфейс репозитория транспорта.
+import '../models/vehicle.dart';
+import '../state/page_result.dart';
+import '../state/vehicle_query.dart';
+
 abstract class VehicleRepository {
   Future<List<Vehicle>> findAll({bool includeDeleted = false});
   Future<Vehicle?> findById(int id);
+  Future<PageResult<Vehicle>> find(
+    VehicleQuery query, {
+    CancelToken? cancelToken,
+  });
   Future<Vehicle> create(Vehicle item);
   Future<Vehicle> update(Vehicle item);
   Future<void> softDelete(int id);

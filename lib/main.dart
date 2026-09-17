@@ -11,24 +11,44 @@ import 'core/auth_api.dart';
 import 'core/reference_cache.dart';
 import 'router.dart';
 
+// ─── Старые репозитории (не трогаем) ───────────────
 import 'repositories/client_repository.dart';
 import 'repositories/cargo_repository.dart';
 import 'repositories/order_repository.dart';
 import 'repositories/route_repository.dart';
 import 'repositories/vehicle_repository.dart';
 
+// ─── Старые API-репозитории (не трогаем) ───────────
 import 'repositories/api/api_client_repository.dart';
 import 'repositories/api/api_cargo_repository.dart';
 import 'repositories/api/api_order_repository.dart';
 import 'repositories/api/api_route_repository.dart';
 import 'repositories/api/api_vehicle_repository.dart';
 
+// ─── НОВЫЕ репозитории (AppUser) ───────────────────
+import 'repositories/user_repository.dart';
+import 'repositories/api/api_user_repository.dart';
+
+// ─── НОВЫЕ репозитории (Warehouse) ─────────────────
+import 'repositories/warehouse_repository.dart';
+import 'repositories/api/api_warehouse_repository.dart';
+
+// ─── НОВЫЕ репозитории (Task) ──────────────────────
+import 'repositories/task_repository.dart';
+import 'repositories/api/api_task_repository.dart';
+
+// ─── Старые notifier'ы (не трогаем) ────────────────
 import 'state/auth_notifier.dart';
 import 'state/client_list_notifier.dart';
 import 'state/order_list_notifier.dart';
 import 'state/cargo_list_notifier.dart';
 import 'state/route_list_notifier.dart';
 import 'state/vehicle_list_notifier.dart';
+
+// ─── НОВЫЕ notifier'ы ──────────────────────────────
+import 'state/user_list_notifier.dart';
+import 'state/warehouse_list_notifier.dart';
+import 'state/task_list_notifier.dart';
 
 import 'widgets/inactivity_watcher.dart';
 
@@ -56,12 +76,13 @@ Future<void> main() async {
   runApp(
     MultiProvider(
       providers: [
+        // ─── Базовые ───────────────────────────────
         Provider<Dio>.value(value: dio),
         Provider<ReferenceCache>(create: (_) => ReferenceCache()),
-
         Provider<AuthApi>.value(value: authApi),
         ChangeNotifierProvider<AuthNotifier>.value(value: authNotifier),
 
+        // ─── Старые репозитории (не трогаем) ───────
         Provider<ClientRepository>(
           create: (context) => ApiClientRepository(context.read<Dio>()),
         ),
@@ -78,6 +99,7 @@ Future<void> main() async {
           create: (context) => ApiOrderRepository(context.read<Dio>()),
         ),
 
+        // ─── Старые notifier'ы (не трогаем) ────────
         ChangeNotifierProvider(
           create: (context) =>
               ClientListNotifier(context.read<ClientRepository>())..load(),
@@ -97,6 +119,32 @@ Future<void> main() async {
         ChangeNotifierProvider(
           create: (context) =>
               VehicleListNotifier(context.read<VehicleRepository>())..load(),
+        ),
+
+        // ─── НОВЫЕ репозитории ─────────────────────
+        Provider<UserRepository>(
+          create: (context) => ApiUserRepository(context.read<AuthApi>()),
+        ),
+        Provider<WarehouseRepository>(
+          create: (context) => ApiWarehouseRepository(context.read<Dio>()),
+        ),
+        Provider<TaskRepository>(
+          create: (context) => ApiTaskRepository(context.read<Dio>()),
+        ),
+
+        // ─── НОВЫЕ notifier'ы ──────────────────────
+        ChangeNotifierProvider(
+          create: (context) =>
+              UserListNotifier(context.read<UserRepository>())..load(),
+        ),
+        ChangeNotifierProvider(
+          create: (context) =>
+              WarehouseListNotifier(context.read<WarehouseRepository>())
+                ..load(),
+        ),
+        ChangeNotifierProvider(
+          create: (context) =>
+              TaskListNotifier(context.read<TaskRepository>())..load(),
         ),
       ],
       child: const MyApp(),
@@ -255,7 +303,8 @@ class _AppWrapperState extends State<_AppWrapper> {
     return InactivityWatcher(
       timeout: const Duration(minutes: 30),
       warningBefore: const Duration(seconds: 30),
-      warningMessage: 'Вы будете отключены через 30 секунд из-за неактивности. Продолжить работу?',
+      warningMessage:
+          'Вы будете отключены через 30 секунд из-за неактивности. Продолжить работу?',
       onTimeout: () async {
         await widget.authNotifier.logout();
       },

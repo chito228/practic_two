@@ -79,14 +79,14 @@ class _OrderListScreenState extends State<OrderListScreen> {
               ),
             ),
           ),
-        if (notifier.hasSelection)
+        if (notifier.hasSelection && auth.uiHasExactly(Role.logist))
           IconButton(
             icon: const Icon(Icons.delete_outline),
             tooltip: 'Удалить выбранные',
             onPressed: () => _confirmDelete(context, notifier),
           ),
       ],
-      floatingActionButton: auth.uiHas(Role.logist)
+      floatingActionButton: auth.uiHasExactly(Role.logist)
           ? FloatingActionButton(
               onPressed: () => context.go('/orders/create'),
               tooltip: 'Создать заказ',
@@ -296,7 +296,9 @@ class _OrderListScreenState extends State<OrderListScreen> {
             items: items,
             idOf: (o) => o.id,
             selected: notifier.selected,
-            onToggleSelect: notifier.toggleSelection,
+            onToggleSelect: auth.uiHasExactly(Role.logist)
+                ? notifier.toggleSelection
+                : null,
             sortField: notifier.query.sortField,
             sortAscending: notifier.query.sortAscending,
             onSort: (field) {
@@ -343,7 +345,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 ),
                 child: const Text('Показать', style: TextStyle(fontSize: 12)),
               ),
-              if (auth.uiHas(Role.logist))
+              if (auth.uiHasExactly(Role.logist))
                 TextButton(
                   onPressed: () => context.go('/orders/${o.id}/edit'),
                   style: TextButton.styleFrom(
@@ -352,7 +354,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                   ),
                   child: const Text('Ред.', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHas(Role.logist))
+              if (auth.uiHasExactly(Role.logist))
                 TextButton(
                   onPressed: () => _softDelete(context, o.id),
                   style: TextButton.styleFrom(
@@ -362,7 +364,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                   ),
                   child: const Text('Скрыть', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHas(Role.admin))
+              if (auth.uiHasExactly(Role.admin))
                 TextButton(
                   onPressed: () => _hardDelete(context, o.id),
                   style: TextButton.styleFrom(

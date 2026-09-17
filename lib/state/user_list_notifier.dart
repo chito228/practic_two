@@ -1,26 +1,26 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
-import '../repositories/vehicle_repository.dart';
-import '../models/vehicle.dart';
+import '../repositories/user_repository.dart';
+import '../models/app_user.dart';
 import 'load_status.dart';
 import 'page_result.dart';
-import 'vehicle_query.dart';
+import 'user_query.dart';
 
-class VehicleListNotifier extends ChangeNotifier {
-  final VehicleRepository _repository;
+class UserListNotifier extends ChangeNotifier {
+  final UserRepository _repository;
 
-  VehicleListNotifier(this._repository);
+  UserListNotifier(this._repository);
 
-  VehicleQuery _query = const VehicleQuery();
-  PageResult<Vehicle> _result = PageResult.empty();
+  UserQuery _query = const UserQuery();
+  PageResult<AppUser> _result = PageResult.empty();
   LoadStatus _status = LoadStatus.idle;
   String? _error;
   final Set<int> _selected = {};
   CancelToken? _cancelToken;
 
-  VehicleQuery get query => _query;
-  PageResult<Vehicle> get result => _result;
+  UserQuery get query => _query;
+  PageResult<AppUser> get result => _result;
   LoadStatus get status => _status;
   String? get error => _error;
   Set<int> get selected => Set.unmodifiable(_selected);
@@ -39,16 +39,16 @@ class VehicleListNotifier extends ChangeNotifier {
       _status = LoadStatus.success;
     } on DioException catch (e) {
       if (CancelToken.isCancel(e)) return;
-      _error = 'Не удалось загрузить список транспорта: $e';
+      _error = 'Не удалось загрузить список пользователей: $e';
       _status = LoadStatus.error;
     } catch (e) {
-      _error = 'Не удалось загрузить список транспорта: $e';
+      _error = 'Не удалось загрузить список пользователей: $e';
       _status = LoadStatus.error;
     }
     notifyListeners();
   }
 
-  Future<void> applyQuery(VehicleQuery next) async {
+  Future<void> applyQuery(UserQuery next) async {
     _query = next;
     _selected.clear();
     await load();

@@ -19,6 +19,17 @@ class MainNavItem {
 }
 
 List<MainNavItem> navItemsFor(AuthNotifier auth) {
+  // Admin видит ТОЛЬКО раздел «Пользователи».
+  if (auth.uiHasExactly(Role.admin)) {
+    return const [
+      MainNavItem(
+        icon: Icons.manage_accounts,
+        label: 'Пользователи',
+        route: '/users',
+      ),
+    ];
+  }
+
   return [
     if (auth.uiHasExactly(Role.logist))
       const MainNavItem(
@@ -39,22 +50,25 @@ List<MainNavItem> navItemsFor(AuthNotifier auth) {
       label: 'Транспорт',
       route: '/vehicles',
     ),
+    const MainNavItem(
+      icon: Icons.warehouse,
+      label: 'Склады',
+      route: '/warehouses',
+    ),
+    const MainNavItem(
+      icon: Icons.task_alt,
+      label: 'Задачи',
+      route: '/tasks',
+    ),
     if (auth.hasExactly(Role.manager))
       const MainNavItem(
         icon: Icons.bar_chart,
         label: 'Статистика',
         route: '/stats',
       ),
-    if (auth.hasExactly(Role.admin))
-      const MainNavItem(
-        icon: Icons.manage_accounts,
-        label: 'Пользователи',
-        route: '/users',
-      ),
   ];
 }
 
-/// Общий каркас. Использовать на основных экранах.
 class MainScaffold extends StatelessWidget {
   final Widget body;
   final String title;
@@ -77,7 +91,6 @@ class MainScaffold extends StatelessWidget {
     final items = navItemsFor(auth);
 
     int selected = 0;
-    // Локальная переменная — чтобы Dart мог промоутить String? до String.
     final route = currentRoute;
     if (route != null) {
       final idx = items.indexWhere((it) => route.startsWith(it.route));

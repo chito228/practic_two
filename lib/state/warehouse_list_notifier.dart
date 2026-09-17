@@ -1,26 +1,26 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
-import '../repositories/vehicle_repository.dart';
-import '../models/vehicle.dart';
+import '../repositories/warehouse_repository.dart';
+import '../models/warehouse.dart';
 import 'load_status.dart';
 import 'page_result.dart';
-import 'vehicle_query.dart';
+import 'warehouse_query.dart';
 
-class VehicleListNotifier extends ChangeNotifier {
-  final VehicleRepository _repository;
+class WarehouseListNotifier extends ChangeNotifier {
+  final WarehouseRepository _repository;
 
-  VehicleListNotifier(this._repository);
+  WarehouseListNotifier(this._repository);
 
-  VehicleQuery _query = const VehicleQuery();
-  PageResult<Vehicle> _result = PageResult.empty();
+  WarehouseQuery _query = const WarehouseQuery();
+  PageResult<Warehouse> _result = PageResult.empty();
   LoadStatus _status = LoadStatus.idle;
   String? _error;
   final Set<int> _selected = {};
   CancelToken? _cancelToken;
 
-  VehicleQuery get query => _query;
-  PageResult<Vehicle> get result => _result;
+  WarehouseQuery get query => _query;
+  PageResult<Warehouse> get result => _result;
   LoadStatus get status => _status;
   String? get error => _error;
   Set<int> get selected => Set.unmodifiable(_selected);
@@ -39,16 +39,16 @@ class VehicleListNotifier extends ChangeNotifier {
       _status = LoadStatus.success;
     } on DioException catch (e) {
       if (CancelToken.isCancel(e)) return;
-      _error = 'Не удалось загрузить список транспорта: $e';
+      _error = 'Не удалось загрузить список складов: $e';
       _status = LoadStatus.error;
     } catch (e) {
-      _error = 'Не удалось загрузить список транспорта: $e';
+      _error = 'Не удалось загрузить список складов: $e';
       _status = LoadStatus.error;
     }
     notifyListeners();
   }
 
-  Future<void> applyQuery(VehicleQuery next) async {
+  Future<void> applyQuery(WarehouseQuery next) async {
     _query = next;
     _selected.clear();
     await load();

@@ -5,9 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../core/api_exceptions.dart';
 import '../models/role.dart';
 import '../state/auth_notifier.dart';
-import '../state/vehicle_list_notifier.dart';
-import '../state/vehicle_query.dart';
-import '../models/vehicle.dart';
+import '../state/user_list_notifier.dart';
+import '../models/app_user.dart';
 import '../widgets/entity_table.dart';
 import '../widgets/responsive_list.dart';
 import '../widgets/error_view.dart';
@@ -16,17 +15,16 @@ import '../widgets/main_scaffold.dart';
 import '../widgets/pagination_controls.dart';
 import '../utils/debounce.dart';
 import '../state/load_status.dart';
-import '../repositories/vehicle_repository.dart';
-import '../repositories/route_repository.dart';
+import '../repositories/user_repository.dart';
 
-class VehicleListScreen extends StatefulWidget {
-  const VehicleListScreen({super.key});
+class UsersListScreen extends StatefulWidget {
+  const UsersListScreen({super.key});
 
   @override
-  State<VehicleListScreen> createState() => _VehicleListScreenState();
+  State<UsersListScreen> createState() => _UsersListScreenState();
 }
 
-class _VehicleListScreenState extends State<VehicleListScreen> {
+class _UsersListScreenState extends State<UsersListScreen> {
   final Debouncer _debouncer = Debouncer();
 
   @override
@@ -35,27 +33,14 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
     super.dispose();
   }
 
-  String _statusText(String s) {
-    switch (s) {
-      case 'active':
-        return 'В работе';
-      case 'maintenance':
-        return 'На обслуживании';
-      case 'repair':
-        return 'В ремонте';
-      default:
-        return s;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final notifier = Provider.of<VehicleListNotifier>(context);
+    final notifier = Provider.of<UserListNotifier>(context);
     final auth = context.watch<AuthNotifier>();
 
     return MainScaffold(
-      title: 'Транспорт',
-      currentRoute: '/vehicles',
+      title: 'Пользователи',
+      currentRoute: '/users',
       actions: [
         if (notifier.hasSelection)
           Padding(
@@ -67,17 +52,11 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
               ),
             ),
           ),
-        if (notifier.hasSelection && auth.uiHasExactly(Role.logist))
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            tooltip: 'Удалить выбранные',
-            onPressed: () => _confirmDelete(context, notifier),
-          ),
       ],
-      floatingActionButton: auth.uiHasExactly(Role.logist)
+      floatingActionButton: auth.uiHasExactly(Role.admin)
           ? FloatingActionButton(
-              onPressed: () => context.go('/vehicles/create'),
-              tooltip: 'Создать транспорт',
+              onPressed: () => context.go('/users/create'),
+              tooltip: 'Создать пользователя',
               child: const Icon(Icons.add),
             )
           : null,
@@ -106,7 +85,7 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
             padding: const EdgeInsets.all(16.0),
             child: TextField(
               decoration: const InputDecoration(
-                labelText: 'Поиск по номеру или водителю',
+                labelText: 'Поиск по ФИО, логину или email',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.search),
               ),
@@ -121,83 +100,35 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: DropdownButtonFormField<String>(
-              value: notifier.query.status,
+            child: DropdownButtonFormField<Role>(
+              value: notifier.query.role,
               decoration: const InputDecoration(
-                labelText: 'Статус',
+                labelText: 'Роль',
                 border: OutlineInputBorder(),
               ),
-              items: const [
-                DropdownMenuItem(value: null, child: Text('Все')),
-                DropdownMenuItem(value: 'active', child: Text('В работе')),
-                DropdownMenuItem(
-                  value: 'maintenance',
-                  child: Text('На обслуживании'),
+              items: [
+                const DropdownMenuItem<Role>(
+                  value: null,
+                  child: Text('Все роли'),
                 ),
-                DropdownMenuItem(value: 'repair', child: Text('В ремонте')),
+                ...Role.values.map(
+                  (r) => DropdownMenuItem<Role>(
+                    value: r,
+                    child: Text(r.label),
+                  ),
+                ),
               ],
               onChanged: (value) {
                 notifier.applyQuery(
                   notifier.query.copyWith(
-                    status: value,
-                    clearStatus: value == null,
+                    role: value,
+                    clearRole: value == null,
                     page: 1,
                   ),
                 );
               },
             ),
           ),
-          if (notifier.query.hasFilters)
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16.0,
-                vertical: 8.0,
-              ),
-              child: Wrap(
-                spacing: 8,
-                children: [
-                  if (notifier.query.search.isNotEmpty)
-                    ActionChip(
-                      label: Text('Поиск: ${notifier.query.search}'),
-                      onPressed: () {
-                        notifier.applyQuery(
-                          notifier.query.copyWith(search: '', page: 1),
-                        );
-                      },
-                    ),
-                  if (notifier.query.status != null)
-                    ActionChip(
-                      label: Text('Статус: ${_statusText(notifier.query.status!)}'),
-                      onPressed: () {
-                        notifier.applyQuery(
-                          notifier.query.copyWith(
-                            clearStatus: true,
-                            page: 1,
-                          ),
-                        );
-                      },
-                    ),
-                  if (notifier.query.includeDeleted)
-                    ActionChip(
-                      label: const Text('Показаны удалённые'),
-                      onPressed: () {
-                        notifier.applyQuery(
-                          notifier.query.copyWith(
-                            includeDeleted: false,
-                            page: 1,
-                          ),
-                        );
-                      },
-                    ),
-                  ActionChip(
-                    label: const Text('Сбросить всё'),
-                    onPressed: () {
-                      notifier.applyQuery(const VehicleQuery());
-                    },
-                  ),
-                ],
-              ),
-            ),
           Expanded(child: _buildContent(notifier, auth)),
           if (notifier.status == LoadStatus.success &&
               notifier.result.total > 0)
@@ -223,7 +154,7 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
     );
   }
 
-  Widget _buildContent(VehicleListNotifier notifier, AuthNotifier auth) {
+  Widget _buildContent(UserListNotifier notifier, AuthNotifier auth) {
     switch (notifier.status) {
       case LoadStatus.idle:
       case LoadStatus.loading:
@@ -235,24 +166,25 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
         );
       case LoadStatus.success:
         if (notifier.result.items.isEmpty) {
-          return const EmptyView(message: 'Нет транспорта');
+          return const EmptyView(message: 'Нет пользователей');
         }
-        return ResponsiveList<Vehicle>(
+        return ResponsiveList<AppUser>(
           items: notifier.result.items,
-          cardBuilder: (v) => Card(
+          cardBuilder: (u) => Card(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: ListTile(
-              title: Text(v.plateNumber, maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text(v.driverName, maxLines: 1, overflow: TextOverflow.ellipsis),
-              trailing: Text('${v.capacity} т'),
-              onTap: () => context.go('/vehicles/${v.id}'),
+              title: Text(u.fullName, maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text('@${u.username} — ${u.email}',
+                  maxLines: 2, overflow: TextOverflow.ellipsis),
+              trailing: Text(u.role.label),
+              onTap: () => context.go('/users/${u.id}'),
             ),
           ),
-          tableBuilder: (items) => EntityTable<Vehicle>(
+          tableBuilder: (items) => EntityTable<AppUser>(
             items: items,
-            idOf: (v) => v.id,
+            idOf: (u) => u.id,
             selected: notifier.selected,
-            onToggleSelect: auth.uiHasExactly(Role.logist)
+            onToggleSelect: auth.uiHasExactly(Role.admin)
                 ? notifier.toggleSelection
                 : null,
             sortField: notifier.query.sortField,
@@ -269,51 +201,55 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
               );
             },
             columns: [
-              TableColumnSpec<Vehicle>(
-                label: 'Номер',
-                sortField: 'plateNumber',
-                build: (v) => Text(v.plateNumber),
+              TableColumnSpec<AppUser>(
+                label: 'ФИО',
+                sortField: 'fullName',
+                build: (u) => Text(u.fullName),
               ),
-              TableColumnSpec<Vehicle>(
-                label: 'Водитель',
-                sortField: 'driverName',
-                build: (v) => Text(v.driverName),
+              TableColumnSpec<AppUser>(
+                label: 'Логин',
+                sortField: 'username',
+                build: (u) => Text(u.username),
               ),
-              TableColumnSpec<Vehicle>(
-                label: 'Тоннаж',
-                sortField: 'capacity',
-                build: (v) => Text('${v.capacity}'),
+              TableColumnSpec<AppUser>(
+                label: 'Email',
+                sortField: 'email',
+                build: (u) => Text(u.email),
               ),
-              TableColumnSpec<Vehicle>(
+              TableColumnSpec<AppUser>(
+                label: 'Роль',
+                sortField: 'role',
+                build: (u) => Text(u.role.label),
+              ),
+              TableColumnSpec<AppUser>(
                 label: 'Статус',
-                build: (v) => Text(_statusText(v.status)),
+                build: (u) => Text(u.isDeleted ? 'Скрыт' : 'Активен'),
               ),
             ],
-            actions: (v) => [
+            actions: (u) => [
               TextButton(
-                onPressed: () => context.go('/vehicles/${v.id}'),
+                onPressed: () => context.go('/users/${u.id}'),
                 child: const Text('Показать', style: TextStyle(fontSize: 12)),
               ),
-              if (auth.uiHasExactly(Role.logist) && !v.isDeleted)
+              TextButton(
+                onPressed: () => context.go('/users/${u.id}/edit'),
+                child: const Text('Ред.', style: TextStyle(fontSize: 12)),
+              ),
+              if (!u.isDeleted)
                 TextButton(
-                  onPressed: () => context.go('/vehicles/${v.id}/edit'),
-                  child: const Text('Ред.', style: TextStyle(fontSize: 12)),
-                ),
-              if (auth.uiHasExactly(Role.logist) && !v.isDeleted)
-                TextButton(
-                  onPressed: () => _softDelete(context, v.id),
+                  onPressed: () => _softDelete(context, u.id),
                   style: TextButton.styleFrom(foregroundColor: Colors.orange),
                   child: const Text('Скрыть', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHasExactly(Role.admin) && !v.isDeleted)
+              if (!u.isDeleted)
                 TextButton(
-                  onPressed: () => _hardDelete(context, v.id),
+                  onPressed: () => _hardDelete(context, u.id),
                   style: TextButton.styleFrom(foregroundColor: Colors.red),
                   child: const Text('Удалить', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHasExactly(Role.admin) && v.isDeleted)
+              if (u.isDeleted)
                 TextButton(
-                  onPressed: () => _restore(context, v.id),
+                  onPressed: () => _restore(context, u.id),
                   style: TextButton.styleFrom(foregroundColor: Colors.green),
                   child: const Text('Восстановить', style: TextStyle(fontSize: 12)),
                 ),
@@ -327,8 +263,8 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
     final c = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Скрыть транспорт?'),
-        content: const Text('Транспорт будет скрыт.'),
+        title: const Text('Скрыть пользователя?'),
+        content: const Text('Пользователь будет скрыт, войти не сможет.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -344,7 +280,7 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
     if (c != true) return;
     if (!context.mounted) return;
     try {
-      final r = Provider.of<VehicleRepository>(context, listen: false);
+      final r = Provider.of<UserRepository>(context, listen: false);
       await r.softDelete(id);
     } on ApiException catch (e) {
       if (context.mounted) {
@@ -354,30 +290,11 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
       return;
     }
     if (!context.mounted) return;
-    final n = Provider.of<VehicleListNotifier>(context, listen: false);
+    final n = Provider.of<UserListNotifier>(context, listen: false);
     await n.load();
   }
 
   Future<void> _hardDelete(BuildContext context, int id) async {
-    final rr = Provider.of<RouteRepository>(context, listen: false);
-    final routes = await rr.findByVehicleId(id);
-    if (!context.mounted) return;
-    if (routes.isNotEmpty) {
-      await showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Невозможно удалить'),
-          content: Text('Используется в ${routes.length} маршрутах.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
     final c = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -398,7 +315,7 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
     if (c != true) return;
     if (!context.mounted) return;
     try {
-      final r = Provider.of<VehicleRepository>(context, listen: false);
+      final r = Provider.of<UserRepository>(context, listen: false);
       await r.hardDelete(id);
     } on ApiException catch (e) {
       if (context.mounted) {
@@ -408,7 +325,7 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
       return;
     }
     if (!context.mounted) return;
-    final n = Provider.of<VehicleListNotifier>(context, listen: false);
+    final n = Provider.of<UserListNotifier>(context, listen: false);
     await n.load();
   }
 
@@ -416,8 +333,8 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
     final c = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Восстановить?'),
-        content: const Text('Транспорт появится в списке.'),
+        title: const Text('Восстановить пользователя?'),
+        content: const Text('Пользователь снова появится в списке.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -433,7 +350,7 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
     if (c != true) return;
     if (!context.mounted) return;
     try {
-      final r = Provider.of<VehicleRepository>(context, listen: false);
+      final r = Provider.of<UserRepository>(context, listen: false);
       await r.restore(id);
     } on ApiException catch (e) {
       if (context.mounted) {
@@ -443,28 +360,7 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
       return;
     }
     if (!context.mounted) return;
-    final n = Provider.of<VehicleListNotifier>(context, listen: false);
+    final n = Provider.of<UserListNotifier>(context, listen: false);
     await n.load();
-  }
-
-  Future<void> _confirmDelete(BuildContext context, VehicleListNotifier n) async {
-    final c = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Подтверждение'),
-        content: Text('Скрыть ${n.selected.length} единиц?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Скрыть'),
-          ),
-        ],
-      ),
-    );
-    if (c == true) await n.deleteSelected();
   }
 }

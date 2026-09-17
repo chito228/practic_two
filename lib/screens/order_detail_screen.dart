@@ -129,30 +129,30 @@ class OrderDetailScreen extends StatelessWidget {
                         child: const Text('Назад'),
                       ),
 
-                      // Редактирование — logist и выше.
-                      if (auth.uiHas(Role.logist))
+                      // Редактирование — только logist.
+                      if (auth.uiHasExactly(Role.logist))
                         ElevatedButton(
                           onPressed: () =>
                               context.go('/orders/${order.id}/edit'),
                           child: const Text('Редактировать'),
                         ),
 
-                      // Скрыть — logist и выше.
+                      // Скрыть — только logist.
                       if (!order.isDeleted) ...[
-                        if (auth.uiHas(Role.logist))
+                        if (auth.uiHasExactly(Role.logist))
                           ElevatedButton(
                             onPressed: () => _softDelete(context, order.id),
                             child: const Text('Скрыть'),
                           ),
                         // Удалить навсегда — только admin.
-                        if (auth.uiHas(Role.admin))
+                        if (auth.uiHasExactly(Role.admin))
                           ElevatedButton(
                             onPressed: () => _hardDelete(context, order.id),
                             child: const Text('Удалить'),
                           ),
                       ] else ...[
                         // Восстановление — только admin.
-                        if (auth.uiHas(Role.admin))
+                        if (auth.uiHasExactly(Role.admin))
                           ElevatedButton(
                             onPressed: () => _restore(context, order.id),
                             child: const Text('Восстановить'),

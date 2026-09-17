@@ -1,9 +1,16 @@
-import '../models/route.dart';
+import 'package:dio/dio.dart';
 
-/// Интерфейс репозитория маршрутов.
+import '../models/route.dart';
+import '../state/page_result.dart';
+import '../state/route_query.dart';
+
 abstract class RouteRepository {
   Future<List<Route>> findAll({bool includeDeleted = false});
   Future<Route?> findById(int id);
+  Future<PageResult<Route>> find(
+    RouteQuery query, {
+    CancelToken? cancelToken,
+  });
   Future<Route> create(Route item);
   Future<Route> update(Route item);
   Future<void> softDelete(int id);

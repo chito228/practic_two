@@ -62,28 +62,28 @@ class ClientDetailScreen extends StatelessWidget {
                       child: const Text('Назад'),
                     ),
 
-                    // Редактирование — только logist и выше.
-                    if (auth.uiHas(Role.logist))
+                    // Редактирование — только logist.
+                    if (auth.uiHasExactly(Role.logist))
                       ElevatedButton(
                         onPressed: () =>
                             context.go('/clients/${client.id}/edit'),
                         child: const Text('Редактировать'),
                       ),
 
-                    // Скрыть/удалить — только admin.
+                    // Скрыть/удалить/восстановить — только admin.
                     if (!client.isDeleted) ...[
-                      if (auth.uiHas(Role.admin))
+                      if (auth.uiHasExactly(Role.admin))
                         ElevatedButton(
                           onPressed: () => _softDelete(context, client.id),
                           child: const Text('Скрыть'),
                         ),
-                      if (auth.uiHas(Role.admin))
+                      if (auth.uiHasExactly(Role.admin))
                         ElevatedButton(
                           onPressed: () => _hardDelete(context, client.id),
                           child: const Text('Удалить'),
                         ),
                     ] else ...[
-                      if (auth.uiHas(Role.admin))
+                      if (auth.uiHasExactly(Role.admin))
                         ElevatedButton(
                           onPressed: () => _restore(context, client.id),
                           child: const Text('Восстановить'),

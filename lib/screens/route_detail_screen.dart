@@ -87,30 +87,30 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                             child: const Text('Назад'),
                           ),
 
-                          // Редактирование маршрута — logist и выше.
-                          if (auth.uiHas(Role.logist))
+                          // Редактирование маршрута — только logist.
+                          if (auth.uiHasExactly(Role.logist))
                             ElevatedButton(
                               onPressed: () =>
                                   context.go('/routes/${route.id}/edit'),
                               child: const Text('Редактировать'),
                             ),
 
-                          // Скрыть — logist и выше.
+                          // Скрыть — только logist.
                           if (!route.isDeleted) ...[
-                            if (auth.uiHas(Role.logist))
+                            if (auth.uiHasExactly(Role.logist))
                               ElevatedButton(
                                 onPressed: () => _softDelete(context, route.id),
                                 child: const Text('Скрыть'),
                               ),
                             // Удалить навсегда — только admin.
-                            if (auth.uiHas(Role.admin))
+                            if (auth.uiHasExactly(Role.admin))
                               ElevatedButton(
                                 onPressed: () => _hardDelete(context, route.id),
                                 child: const Text('Удалить'),
                               ),
                           ] else ...[
                             // Восстановление — только admin.
-                            if (auth.uiHas(Role.admin))
+                            if (auth.uiHasExactly(Role.admin))
                               ElevatedButton(
                                 onPressed: () => _restore(context, route.id),
                                 child: const Text('Восстановить'),

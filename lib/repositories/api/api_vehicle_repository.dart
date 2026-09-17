@@ -2,9 +2,10 @@ import 'package:dio/dio.dart';
 
 import '../../core/api_exceptions.dart';
 import '../../models/vehicle.dart';
+import '../../state/page_result.dart';
+import '../../state/vehicle_query.dart';
 import '../vehicle_repository.dart';
 
-/// Реализация VehicleRepository через HTTP API (Dio).
 class ApiVehicleRepository implements VehicleRepository {
   final Dio _dio;
   ApiVehicleRepository(this._dio);
@@ -37,6 +38,37 @@ class ApiVehicleRepository implements VehicleRepository {
         if (e.response?.statusCode == 404) return null;
         rethrow;
       }
+    });
+  }
+
+  @override
+  Future<PageResult<Vehicle>> find(
+    VehicleQuery query, {
+    CancelToken? cancelToken,
+  }) {
+    return guard(() async {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/vehicles',
+        cancelToken: cancelToken,
+        queryParameters: {
+          if (query.search.trim().isNotEmpty) 'search': query.search.trim(),
+          if (query.status != null) 'status': query.status,
+          'sort': '${query.sortField},${query.sortAscending ? 'asc' : 'desc'}',
+          'page': query.page,
+          'size': query.size,
+          if (query.includeDeleted) 'includeDeleted': true,
+        },
+      );
+      final data = response.data!;
+      return PageResult(
+        items: (data['items'] as List? ?? [])
+            .whereType<Map<String, dynamic>>()
+            .map(Vehicle.fromJson)
+            .toList(),
+        page: data['page'] as int? ?? 1,
+        size: data['size'] as int? ?? query.size,
+        total: data['total'] as int? ?? 0,
+      );
     });
   }
 
@@ -94,9 +126,6 @@ class ApiVehicleRepository implements VehicleRepository {
     });
   }
 
-  /// `driverLicense` сервер принимает как объект или null.
-  /// В учебном сценарии лицензия редко редактируется из формы,
-  /// поэтому шлём как есть — или null, если нет.
   Map<String, dynamic> _toApiJson(Vehicle item) => {
     'plateNumber': item.plateNumber,
     'driverName': item.driverName,

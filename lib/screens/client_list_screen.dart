@@ -53,14 +53,14 @@ class _ClientListScreenState extends State<ClientListScreen> {
               ),
             ),
           ),
-        if (notifier.hasSelection)
+        if (notifier.hasSelection && auth.uiHasExactly(Role.logist))
           IconButton(
             icon: const Icon(Icons.delete_outline),
             tooltip: 'Удалить выбранные',
             onPressed: () => _confirmDelete(context, notifier),
           ),
       ],
-      floatingActionButton: auth.uiHas(Role.logist)
+      floatingActionButton: auth.uiHasExactly(Role.logist)
           ? FloatingActionButton(
               onPressed: () => context.go('/clients/create'),
               tooltip: 'Создать клиента',
@@ -118,29 +118,27 @@ class _ClientListScreenState extends State<ClientListScreen> {
                     ActionChip(
                       label: Text('Поиск: ${notifier.query.search}'),
                       onPressed: () {
-                        final newQuery = notifier.query.copyWith(
-                          search: '',
-                          page: 1,
+                        notifier.applyQuery(
+                          notifier.query.copyWith(search: '', page: 1),
                         );
-                        notifier.applyQuery(newQuery);
                       },
                     ),
                   if (notifier.query.includeDeleted)
                     ActionChip(
                       label: const Text('Показаны удалённые'),
                       onPressed: () {
-                        final newQuery = notifier.query.copyWith(
-                          includeDeleted: false,
-                          page: 1,
+                        notifier.applyQuery(
+                          notifier.query.copyWith(
+                            includeDeleted: false,
+                            page: 1,
+                          ),
                         );
-                        notifier.applyQuery(newQuery);
                       },
                     ),
                   ActionChip(
                     label: const Text('Сбросить всё'),
                     onPressed: () {
-                      final newQuery = const ClientQuery();
-                      notifier.applyQuery(newQuery);
+                      notifier.applyQuery(const ClientQuery());
                     },
                   ),
                 ],
@@ -214,7 +212,9 @@ class _ClientListScreenState extends State<ClientListScreen> {
             items: items,
             idOf: (c) => c.id,
             selected: notifier.selected,
-            onToggleSelect: notifier.toggleSelection,
+            onToggleSelect: auth.uiHasExactly(Role.logist)
+                ? notifier.toggleSelection
+                : null,
             sortField: notifier.query.sortField,
             sortAscending: notifier.query.sortAscending,
             onSort: (field) {
@@ -251,7 +251,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
                 ),
                 child: const Text('Показать', style: TextStyle(fontSize: 12)),
               ),
-              if (auth.uiHas(Role.logist))
+              if (auth.uiHasExactly(Role.logist))
                 TextButton(
                   onPressed: () => context.go('/clients/${c.id}/edit'),
                   style: TextButton.styleFrom(
@@ -260,7 +260,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
                   ),
                   child: const Text('Ред.', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHas(Role.logist))
+              if (auth.uiHasExactly(Role.logist))
                 TextButton(
                   onPressed: () => _softDelete(context, c.id),
                   style: TextButton.styleFrom(
@@ -270,7 +270,7 @@ class _ClientListScreenState extends State<ClientListScreen> {
                   ),
                   child: const Text('Скрыть', style: TextStyle(fontSize: 12)),
                 ),
-              if (auth.uiHas(Role.admin))
+              if (auth.uiHasExactly(Role.admin))
                 TextButton(
                   onPressed: () => _hardDelete(context, c.id),
                   style: TextButton.styleFrom(

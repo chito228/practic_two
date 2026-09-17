@@ -88,11 +88,15 @@ class AuthApi {
   }
 
   /// GET /users — список пользователей (только admin).
-  Future<List<AppUser>> listUsers() {
+  /// При `includeDeleted: true` возвращает и удалённых.
+  Future<List<AppUser>> listUsers({bool includeDeleted = false}) {
     return guard(() async {
       final response = await _dio.get<Map<String, dynamic>>(
         '/users',
-        queryParameters: {'size': 100},
+        queryParameters: {
+          'size': 100,
+          if (includeDeleted) 'includeDeleted': true,
+        },
       );
       final data = response.data!;
       return (data['items'] as List? ?? [])
@@ -148,9 +152,29 @@ class AuthApi {
   }
 
   /// DELETE /users/{id} — мягкое удаление (только admin).
+  /// Пользователь скрывается, но запись остаётся. Можно восстановить.
   Future<void> deleteUser(int id) {
     return guard(() async {
       await _dio.delete<void>('/users/$id');
+    });
+  }
+
+  /// DELETE /users/{id}?hard=true — физическое удаление (только admin).
+  /// Запись стирается безвозвратно. Нельзя восстановить.
+  Future<void> hardDeleteUser(int id) {
+    return guard(() async {
+      await _dio.delete<void>(
+        '/users/$id',
+        queryParameters: {'hard': true},
+      );
+    });
+  }
+
+  /// POST /users/{id}/restore — восстановление (только admin).
+  /// Возвращает ранее скрытого пользователя в активные.
+  Future<void> restoreUser(int id) {
+    return guard(() async {
+      await _dio.post<void>('/users/$id/restore');
     });
   }
 

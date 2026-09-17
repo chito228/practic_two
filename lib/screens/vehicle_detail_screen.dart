@@ -71,8 +71,8 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                   _infoRow('Водитель', vehicle.driverName),
                   _infoRow('Грузоподъёмность', '${vehicle.capacity} тонн'),
 
-                  // Смена статуса — для logist и admin.
-                  if (auth.uiHas(Role.logist))
+                  // Смена статуса — только logist.
+                  if (auth.uiHasExactly(Role.logist))
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8.0),
                       child: Wrap(
@@ -172,7 +172,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
                       ),
 
                       // Редактирование — только admin.
-                      if (auth.uiHas(Role.admin))
+                      if (auth.uiHasExactly(Role.admin))
                         ElevatedButton(
                           onPressed: () =>
                               context.go('/vehicles/${vehicle.id}/edit'),
@@ -181,18 +181,18 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
 
                       // Скрытие / удаление / восстановление — только admin.
                       if (!vehicle.isDeleted) ...[
-                        if (auth.uiHas(Role.admin))
+                        if (auth.uiHasExactly(Role.admin))
                           ElevatedButton(
                             onPressed: () => _softDelete(vehicle.id),
                             child: const Text('Скрыть'),
                           ),
-                        if (auth.uiHas(Role.admin))
+                        if (auth.uiHasExactly(Role.admin))
                           ElevatedButton(
                             onPressed: () => _hardDelete(vehicle.id),
                             child: const Text('Удалить'),
                           ),
                       ] else ...[
-                        if (auth.uiHas(Role.admin))
+                        if (auth.uiHasExactly(Role.admin))
                           ElevatedButton(
                             onPressed: () => _restore(vehicle.id),
                             child: const Text('Восстановить'),
@@ -251,7 +251,7 @@ class _VehicleDetailScreenState extends State<VehicleDetailScreen> {
   }
 
   // ─────────────────────────────────────────────────────
-  // Смена статуса транспорта (logist+)
+  // Смена статуса транспорта (logist)
   // ─────────────────────────────────────────────────────
   Future<void> _changeStatus(int id, String newStatus) async {
     try {

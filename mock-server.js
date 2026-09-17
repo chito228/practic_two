@@ -11,6 +11,41 @@
  * Учебные возможности:
  *   ?__delay=1500   задержка ответа в миллисекундах
  *   ?__fail=500     принудительный код ошибки
+ *
+ * Коллекции:
+ *   clients, orders, cargo, routes, vehicles
+ *   warehouses  — склады (logist+manager, БЕЗ admin)
+ *   tasks       — задачи (manager+logist, БЕЗ admin)
+ *
+ * ─── Матрица доступа ───────────────────────────────
+ *
+ * manager (Руководитель):
+ *   READ:  clients, orders, cargo, routes, vehicles,
+ *          warehouses, tasks
+ *   WRITE: tasks (создание, редактирование, скрытие)
+ *   Смена статуса: —
+ *   Уникальный раздел: Статистика
+ *
+ * logist (Логист):
+ *   READ:  clients, orders, cargo, routes, vehicles,
+ *          warehouses, tasks
+ *   WRITE: clients, orders, cargo, routes, vehicles,
+ *          warehouses
+ *   Смена статуса: vehicles, tasks
+ *   Уникальный раздел: Диспетчерская
+ *
+ * admin (Администратор):
+ *   READ:  users
+ *   WRITE: users
+ *   Hard-delete: любые сущности
+ *   Restore: любые сущности
+ *   Уникальный раздел: Пользователи
+ *
+ * НЕТ ДОСТУПА:
+ *   admin → warehouses, tasks (ни чтения, ни записи)
+ *   admin → clients, orders, cargo, routes, vehicles (ни чтения)
+ *   manager → запись в clients, orders, cargo, routes,
+ *             vehicles, warehouses
  */
 
 'use strict';
@@ -73,6 +108,8 @@ function seed() {
     routes: [],
     vehicles: [],
     users: [],
+    warehouses: [],
+    tasks: [],
     refreshTokens: new Set(),
   };
 
@@ -152,9 +189,76 @@ function seed() {
   O('ORD-005', c3, [g3], [r2], 'Запасные части', 120.0, 1.5, '2026-08-25T00:00:00Z', 'cancelled');
 
   // ─── Пользователи ───
-  push('users', { username: 'admin', passwordHash: hash('admin123'), fullName: 'Администратор', email: 'admin@logist.local', role: 'admin' });
-  push('users', { username: 'logist', passwordHash: hash('logist123'), fullName: 'Логинов Л. Л.', email: 'logist@logist.local', role: 'logist' });
-  push('users', { username: 'manager', passwordHash: hash('manager123'), fullName: 'Руководителев Р. Р.', email: 'manager@logist.local', role: 'manager' });
+  const uAdmin = push('users', { username: 'admin', passwordHash: hash('admin123'), fullName: 'Администратор', email: 'admin@logist.local', role: 'admin' });
+  const uLogist = push('users', { username: 'logist', passwordHash: hash('logist123'), fullName: 'Логинов Л. Л.', email: 'logist@logist.local', role: 'logist' });
+  const uManager = push('users', { username: 'manager', passwordHash: hash('manager123'), fullName: 'Руководителев Р. Р.', email: 'manager@logist.local', role: 'manager' });
+
+  // ─── Склады ───
+  const W = (name, address, type, capacity, currentLoad, managerId, cargoIds, routeIds) =>
+    push('warehouses', {
+      name,
+      address,
+      type,
+      capacity,
+      currentLoad,
+      managerId: managerId || null,
+      cargoIds: cargoIds || [],
+      routeIds: routeIds || [],
+    });
+
+  W('Склад №1 «Москва-Север»', 'г. Москва, ул. Ленина, 1', 'dry', 1000.0, 850.0, uLogist, [g1, g3], [r1, r2]);
+  W('Склад №2 «Казань-Центр»', 'г. Казань, ул. Баумана, 5', 'cold', 500.0, 480.0, uLogist, [g2], [r2, r3]);
+  W('Склад №3 «СПб-Порт»', 'г. Санкт-Петербург, Невский пр., 10', 'hazardous', 2000.0, 350.0, null, [], [r1, r3]);
+
+  // ─── Задачи ───
+  const T = (title, description, priority, status, createdById, assignedToId, orderId, routeId, dueDate, resolution = null) =>
+    push('tasks', {
+      title,
+      description,
+      priority,
+      status,
+      createdById,
+      assignedToId,
+      orderId: orderId || null,
+      routeId: routeId || null,
+      dueDate: dueDate || null,
+      resolution,
+    });
+
+  T(
+    'Проверить маршрут Москва-Казань',
+    'Маршрут показывает аномально высокое расчётное время. Проверить данные.',
+    'high',
+    'new',
+    uManager,
+    uLogist,
+    null,
+    r2,
+    '2026-09-20T00:00:00Z',
+  );
+  T(
+    'Сверить вес груза ORD-002',
+    'Вес в заказе не совпадает с данными склада.',
+    'medium',
+    'in_progress',
+    uManager,
+    uLogist,
+    null,
+    null,
+    '2026-09-25T00:00:00Z',
+  );
+  T(
+    'Обновить данные по складу №3',
+    'Склад пустой, но числится в маршрутах. Уточнить статус.',
+    'low',
+    'done',
+    uManager,
+    uLogist,
+    null,
+    null,
+    '2026-09-15T00:00:00Z',
+    'Данные обновлены, склад активен.',
+  );
 }
 
 function push(collection, obj) {
@@ -239,6 +343,41 @@ function expandUser(u) {
     fullName: u.fullName,
     email: u.email,
     role: u.role,
+    deletedAt: u.deletedAt,
+  };
+}
+
+function expandWarehouse(w) {
+  return {
+    id: w.id,
+    name: w.name,
+    address: w.address,
+    type: w.type,
+    capacity: w.capacity,
+    currentLoad: w.currentLoad,
+    managerId: w.managerId,
+    cargoIds: w.cargoIds,
+    routeIds: w.routeIds,
+    createdAt: w.createdAt,
+    deletedAt: w.deletedAt,
+  };
+}
+
+function expandTask(t) {
+  return {
+    id: t.id,
+    title: t.title,
+    description: t.description,
+    priority: t.priority,
+    status: t.status,
+    createdById: t.createdById,
+    assignedToId: t.assignedToId,
+    orderId: t.orderId,
+    routeId: t.routeId,
+    createdAt: t.createdAt,
+    dueDate: t.dueDate,
+    resolution: t.resolution,
+    deletedAt: t.deletedAt,
   };
 }
 
@@ -248,6 +387,8 @@ const EXPANDERS = {
   cargo: (g) => g,
   routes: expandRoute,
   vehicles: expandVehicle,
+  warehouses: expandWarehouse,
+  tasks: expandTask,
 };
 
 // ─────────────────────────── общие операции ───────────────────────────
@@ -259,6 +400,8 @@ function searchableText(collection, item) {
     case 'cargo': return [item.name, item.description].join(' ');
     case 'routes': return [item.name, item.origin, item.destination].join(' ');
     case 'vehicles': return [item.plateNumber, item.driverName].join(' ');
+    case 'warehouses': return [item.name, item.address].join(' ');
+    case 'tasks': return [item.title, item.description].join(' ');
     default: return '';
   }
 }
@@ -287,6 +430,20 @@ function applyFilters(collection, rows, q) {
 
   if (collection === 'vehicles') {
     if (q.status) result = result.filter((v) => v.status === q.status);
+  }
+
+  if (collection === 'warehouses') {
+    if (q.type) result = result.filter((w) => w.type === q.type);
+    if (q.managerId) result = result.filter((w) => w.managerId === Number(q.managerId));
+  }
+
+  if (collection === 'tasks') {
+    if (q.status) result = result.filter((t) => t.status === q.status);
+    if (q.priority) result = result.filter((t) => t.priority === q.priority);
+    if (q.createdById) result = result.filter((t) => t.createdById === Number(q.createdById));
+    if (q.assignedToId) result = result.filter((t) => t.assignedToId === Number(q.assignedToId));
+    if (q.orderId) result = result.filter((t) => t.orderId === Number(q.orderId));
+    if (q.routeId) result = result.filter((t) => t.routeId === Number(q.routeId));
   }
 
   return result;
@@ -422,6 +579,75 @@ function validate(collection, body, id = null) {
     if (!c || c <= 0) e.capacity = 'Грузоподъёмность должна быть положительной';
   }
 
+  if (collection === 'warehouses') {
+    if (!str(body.name)) e.name = 'Укажите название склада';
+    else if (str(body.name).length > 150) e.name = 'Не длиннее 150 символов';
+    else {
+      const dup = db.warehouses.find((w) => w.name.toLowerCase() === str(body.name).toLowerCase() && w.id !== id && !w.deletedAt);
+      if (dup) e.name = 'Склад с таким названием уже существует';
+    }
+
+    if (!str(body.address)) e.address = 'Укажите адрес';
+    else if (str(body.address).length > 300) e.address = 'Не длиннее 300 символов';
+
+    if (!str(body.type)) e.type = 'Укажите тип склада';
+    else if (!['dry', 'cold', 'hazardous'].includes(str(body.type))) {
+      e.type = 'Недопустимый тип склада';
+    }
+
+    const cap = Number(body.capacity);
+    if (!cap || cap <= 0) e.capacity = 'Вместимость должна быть положительной';
+
+    const load = Number(body.currentLoad);
+    if (load == null || load < 0) e.currentLoad = 'Загрузка не может быть отрицательной';
+    else if (cap > 0 && load > cap) e.currentLoad = 'Загрузка не может превышать вместимость';
+
+    if (body.managerId) {
+      if (!db.users.find((u) => u.id === Number(body.managerId) && !u.deletedAt)) {
+        e.managerId = 'Ответственный не найден';
+      }
+    }
+  }
+
+  if (collection === 'tasks') {
+    if (!str(body.title)) e.title = 'Укажите название задачи';
+    else if (str(body.title).length > 200) e.title = 'Не длиннее 200 символов';
+
+    if (!str(body.description)) e.description = 'Укажите описание';
+    else if (str(body.description).length > 1000) e.description = 'Не длиннее 1000 символов';
+
+    if (!str(body.priority)) e.priority = 'Укажите приоритет';
+    else if (!['low', 'medium', 'high'].includes(str(body.priority))) {
+      e.priority = 'Недопустимый приоритет';
+    }
+
+    if (body.status && !['new', 'in_progress', 'done', 'rejected'].includes(str(body.status))) {
+      e.status = 'Недопустимый статус';
+    }
+
+    if (!body.createdById) e.createdById = 'Укажите автора';
+    else if (!db.users.find((u) => u.id === Number(body.createdById) && !u.deletedAt)) {
+      e.createdById = 'Автор не найден';
+    }
+
+    if (!body.assignedToId) e.assignedToId = 'Укажите исполнителя';
+    else if (!db.users.find((u) => u.id === Number(body.assignedToId) && !u.deletedAt)) {
+      e.assignedToId = 'Исполнитель не найден';
+    }
+
+    if (body.orderId) {
+      if (!db.orders.find((o) => o.id === Number(body.orderId) && !o.deletedAt)) {
+        e.orderId = 'Заказ не найден';
+      }
+    }
+
+    if (body.routeId) {
+      if (!db.routes.find((r) => r.id === Number(body.routeId) && !r.deletedAt)) {
+        e.routeId = 'Маршрут не найден';
+      }
+    }
+  }
+
   return e;
 }
 
@@ -474,9 +700,6 @@ function currentUser(req) {
 }
 
 // ─── РОЛИ ───
-// manager (1) — Руководитель. Аналитика, просмотр.
-// logist  (2) — Логист. Операции: заказы, маршруты, клиенты.
-// admin   (3) — Администратор. Управление системой.
 const ROLE_LEVEL = { manager: 1, logist: 2, admin: 3 };
 
 function requireRole(res, user, minRole) {
@@ -491,20 +714,69 @@ function requireRole(res, user, minRole) {
   return true;
 }
 
-const COLLECTIONS = ['clients', 'orders', 'cargo', 'routes', 'vehicles'];
-
-// ─────────────────────────── правило доступа по сущностям ───────────────────────────
+// ──────────────────────── МАТРИЦА ДОСТУПА ────────────────────────
 
 /**
- * Минимальная роль для операций создания/изменения/удаления.
- * - clients, orders, routes: logist (и admin)
- * - cargo, vehicles:         admin
- *   (logist может только менять статус транспорта — отдельным эндпоинтом)
+ * Допустимые роли для ЧТЕНИЯ коллекции.
+ *
+ * manager видит ВСЕ бизнес-разделы на чтение (без права записи).
+ * logist видит ВСЕ бизнес-разделы на чтение и запись.
+ * admin не видит бизнес-разделы — у него только users.
  */
-function requiredRoleFor(collection) {
-  if (collection === 'cargo' || collection === 'vehicles') return 'admin';
-  return 'logist';
+function allowedRolesFor(collection) {
+  // admin не видит бизнес-данные
+  if (collection === 'warehouses') return ['logist', 'manager'];
+  if (collection === 'tasks') return ['manager', 'logist'];
+
+  // manager и logist читают всё остальное
+  return ['manager', 'logist'];
 }
+
+function requireReadAccess(res, user, collection) {
+  if (!user) {
+    fail(res, 401, 'Требуется аутентификация');
+    return false;
+  }
+  const allowed = allowedRolesFor(collection);
+  if (!allowed.includes(user.role)) {
+    fail(res, 403, `Роль «${user.role}» не может читать «${collection}»`);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Может ли роль ПИСАТЬ в коллекцию.
+ *
+ * - tasks:   только manager
+ * - всё остальное: только logist
+ */
+function canWriteToCollection(collection, role) {
+  if (collection === 'tasks') return role === 'manager';
+  return role === 'logist';
+}
+
+function requireWriteAccess(res, user, collection) {
+  if (!user) {
+    fail(res, 401, 'Требуется аутентификация');
+    return false;
+  }
+  if (!canWriteToCollection(collection, user.role)) {
+    fail(res, 403, `Роль «${user.role}» не может изменять «${collection}»`);
+    return false;
+  }
+  return true;
+}
+
+const COLLECTIONS = [
+  'clients',
+  'orders',
+  'cargo',
+  'routes',
+  'vehicles',
+  'warehouses',
+  'tasks',
+];
 
 // ─────────────────────────────── маршруты ───────────────────────────────
 
@@ -614,15 +886,23 @@ async function handle(req, res, url) {
 
   // ── управление пользователями (только admin) ──
 
-  // Список пользователей
   if (path === '/api/users' && method === 'GET') {
     if (!requireRole(res, user, 'admin')) return;
-    const rows = applySort(db.users.filter((u) => !u.deletedAt), q.sort);
+    let rows = db.users.filter((u) => q.includeDeleted === 'true' || !u.deletedAt);
+    if (q.search) {
+      const needle = String(q.search).toLowerCase();
+      rows = rows.filter((u) =>
+        u.username.toLowerCase().includes(needle) ||
+        u.fullName.toLowerCase().includes(needle) ||
+        u.email.toLowerCase().includes(needle)
+      );
+    }
+    if (q.role) rows = rows.filter((u) => u.role === q.role);
+    rows = applySort(rows, q.sort);
     const page = paginate(rows, q);
     return send(res, 200, { ...page, items: page.items.map(expandUser) });
   }
 
-  // Создание пользователя
   if (path === '/api/users' && method === 'POST') {
     if (!requireRole(res, user, 'admin')) return;
     const body = await readBody(req);
@@ -652,7 +932,17 @@ async function handle(req, res, url) {
     return send(res, 201, expandUser(db.users.find((u) => u.id === id)));
   }
 
-  // Смена роли / редактирование пользователя
+  // ── восстановление пользователя (только admin) ──
+  let userRestoreMatch = path.match(/^\/api\/users\/(\d+)\/restore$/);
+  if (userRestoreMatch && method === 'POST') {
+    if (!requireRole(res, user, 'admin')) return;
+    const id = Number(userRestoreMatch[1]);
+    const u = db.users.find((x) => x.id === id);
+    if (!u) return fail(res, 404, 'Пользователь не найден');
+    u.deletedAt = null;
+    return send(res, 200, expandUser(u));
+  }
+
   let userMatch = path.match(/^\/api\/users\/(\d+)$/);
   if (userMatch && (method === 'PATCH' || method === 'PUT')) {
     if (!requireRole(res, user, 'admin')) return;
@@ -676,21 +966,31 @@ async function handle(req, res, url) {
     return send(res, 200, expandUser(u));
   }
 
-  // Удаление пользователя (soft)
+  // ── удаление пользователя (soft или hard, только admin) ──
   if (userMatch && method === 'DELETE') {
     if (!requireRole(res, user, 'admin')) return;
     const id = Number(userMatch[1]);
     const u = db.users.find((x) => x.id === id && !x.deletedAt);
     if (!u) return fail(res, 404, 'Пользователь не найден');
     if (u.id === user.id) return fail(res, 409, 'Нельзя удалить самого себя');
-    u.deletedAt = new Date().toISOString();
+
+    const hard = q.hard === 'true';
+    if (hard) {
+      const index = db.users.findIndex((x) => x.id === id);
+      db.users.splice(index, 1);
+    } else {
+      u.deletedAt = new Date().toISOString();
+    }
     return send(res, 204);
   }
 
-  // ── смена статуса транспорта (logist + admin) ──
+  // ── смена статуса транспорта (logist) ──
   let statusMatch = path.match(/^\/api\/vehicles\/(\d+)\/status$/);
   if (statusMatch && method === 'PATCH') {
     if (!requireRole(res, user, 'logist')) return;
+    if (user.role !== 'logist') {
+      return fail(res, 403, 'Смена статуса доступна только логисту');
+    }
     const id = Number(statusMatch[1]);
     const body = await readBody(req);
     if (!body || typeof body.status !== 'string') {
@@ -710,11 +1010,7 @@ async function handle(req, res, url) {
     const collection = bulk[1];
     if (!COLLECTIONS.includes(collection)) return fail(res, 404, 'Ресурс не найден');
 
-    // Массовое скрытие:
-    // - clients/orders/routes — logist и admin
-    // - cargo/vehicles         — только admin
-    const minRole = requiredRoleFor(collection);
-    if (!requireRole(res, user, minRole)) return;
+    if (!requireWriteAccess(res, user, collection)) return;
 
     const body = await readBody(req);
     const ids = Array.isArray(body && body.ids) ? body.ids.map(Number) : [];
@@ -740,20 +1036,19 @@ async function handle(req, res, url) {
     if (!COLLECTIONS.includes(collection)) return fail(res, 404, 'Ресурс не найден');
     const expand = EXPANDERS[collection];
 
-    // восстановление
-    // - clients/orders/routes — logist и admin
-    // - cargo/vehicles         — только admin
+    // ─── ВОССТАНОВЛЕНИЕ (только admin) ───
     if (action === 'restore' && method === 'POST') {
-      const minRole = requiredRoleFor(collection);
-      if (!requireRole(res, user, minRole)) return;
+      if (!requireRole(res, user, 'admin')) return;
       const row = db[collection].find((x) => x.id === id);
       if (!row) return fail(res, 404, 'Объект не найден');
       row.deletedAt = null;
       return send(res, 200, expand(row));
     }
 
-    // список
+    // ─── СПИСОК (чтение) ───
     if (id === null && method === 'GET') {
+      if (!requireReadAccess(res, user, collection)) return;
+
       let rows = db[collection];
       if (q.includeDeleted !== 'true') rows = rows.filter((x) => !x.deletedAt);
 
@@ -763,19 +1058,17 @@ async function handle(req, res, url) {
       return send(res, 200, { ...page, items: page.items.map(expand) });
     }
 
-    // одна запись
+    // ─── ОДНА ЗАПИСЬ (чтение) ───
     if (id !== null && method === 'GET') {
+      if (!requireReadAccess(res, user, collection)) return;
       const row = db[collection].find((x) => x.id === id && (q.includeDeleted === 'true' || !x.deletedAt));
       if (!row) return fail(res, 404, 'Объект не найден');
       return send(res, 200, expand(row));
     }
 
-    // создание
-    // - clients/orders/routes — logist и admin
-    // - cargo/vehicles         — только admin
+    // ─── СОЗДАНИЕ (запись) ───
     if (id === null && method === 'POST') {
-      const minRole = requiredRoleFor(collection);
-      if (!requireRole(res, user, minRole)) return;
+      if (!requireWriteAccess(res, user, collection)) return;
       const body = await readBody(req);
       if (!body) return fail(res, 400, 'Тело запроса не является корректным JSON');
 
@@ -788,12 +1081,9 @@ async function handle(req, res, url) {
       return send(res, 201, expand(row));
     }
 
-    // изменение
-    // - clients/orders/routes — logist и admin
-    // - cargo/vehicles         — только admin
+    // ─── ИЗМЕНЕНИЕ (запись) ───
     if (id !== null && (method === 'PUT' || method === 'PATCH')) {
-      const minRole = requiredRoleFor(collection);
-      if (!requireRole(res, user, minRole)) return;
+      if (!requireWriteAccess(res, user, collection)) return;
       const row = db[collection].find((x) => x.id === id && !x.deletedAt);
       if (!row) return fail(res, 404, 'Объект не найден');
 
@@ -808,20 +1098,17 @@ async function handle(req, res, url) {
       return send(res, 200, expand(row));
     }
 
-    // удаление
-    // - hard:  только admin (все сущности)
-    // - soft:  clients/orders/routes — logist и admin
-    //          cargo/vehicles         — только admin
+    // ─── УДАЛЕНИЕ ───
     if (id !== null && method === 'DELETE') {
       const hard = q.hard === 'true';
 
-      let minRole;
       if (hard) {
-        minRole = 'admin';
+        // Hard-delete — только admin, для любой коллекции
+        if (!requireRole(res, user, 'admin')) return;
       } else {
-        minRole = requiredRoleFor(collection);
+        // Soft-delete — по матрице write-доступа
+        if (!requireWriteAccess(res, user, collection)) return;
       }
-      if (!requireRole(res, user, minRole)) return;
 
       const index = db[collection].findIndex((x) => x.id === id);
       if (index === -1) return fail(res, 404, 'Объект не найден');
@@ -843,6 +1130,16 @@ async function handle(req, res, url) {
         if (collection === 'vehicles') {
           const linked = db.routes.some((r) => r.vehicleId === id && !r.deletedAt);
           if (linked) return fail(res, 409, 'Транспорт используется в маршрутах');
+        }
+        if (collection === 'warehouses') {
+          const linkedCargo = db.warehouses.find((w) => w.id === id);
+          if (linkedCargo && linkedCargo.cargoIds && linkedCargo.cargoIds.length) {
+            return fail(res, 409, 'На складе хранятся грузы');
+          }
+          const linkedRoute = db.warehouses.find((w) => w.id === id);
+          if (linkedRoute && linkedRoute.routeIds && linkedRoute.routeIds.length) {
+            return fail(res, 409, 'Через склад проходят маршруты');
+          }
         }
         db[collection].splice(index, 1);
       } else {
@@ -907,6 +1204,30 @@ function normalize(collection, body) {
         status: str(body.status) || 'active',
         driverLicense: body.driverLicense || null,
       };
+    case 'warehouses':
+      return {
+        name: str(body.name),
+        address: str(body.address),
+        type: str(body.type) || 'dry',
+        capacity: num(body.capacity) ?? 0,
+        currentLoad: num(body.currentLoad) ?? 0,
+        managerId: num(body.managerId),
+        cargoIds: ids(body.cargoIds),
+        routeIds: ids(body.routeIds),
+      };
+    case 'tasks':
+      return {
+        title: str(body.title),
+        description: str(body.description),
+        priority: str(body.priority) || 'medium',
+        status: str(body.status) || 'new',
+        createdById: num(body.createdById),
+        assignedToId: num(body.assignedToId),
+        orderId: num(body.orderId),
+        routeId: num(body.routeId),
+        dueDate: body.dueDate || null,
+        resolution: str(body.resolution) || null,
+      };
     default:
       return { ...body };
   }
@@ -952,5 +1273,8 @@ server.listen(PORT, () => {
   console.log('  Сброс данных:    POST /api/__reset');
   console.log('  Задержка ответа: любой запрос с ?__delay=1500');
   console.log('  Ошибка по требованию: любой запрос с ?__fail=500');
+  console.log('');
+  console.log('  Коллекции: clients, orders, cargo, routes, vehicles,');
+  console.log('             warehouses, tasks');
   console.log('');
 });
